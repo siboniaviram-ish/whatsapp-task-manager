@@ -106,7 +106,6 @@ class ConversationFlow:
         except Exception:
             if db:
                 db.rollback()
-            raise
         finally:
             if db:
                 db.close()
@@ -132,7 +131,6 @@ class ConversationFlow:
         except Exception:
             if db:
                 db.rollback()
-            raise
         finally:
             if db:
                 db.close()

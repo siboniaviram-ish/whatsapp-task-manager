@@ -338,9 +338,15 @@ def _handle_flow(user_id, phone, text, action_id, flow_name, flow_data):
             send_main_menu(phone)
     except Exception as e:
         logger.error("Flow '%s' error for user %s: %s", flow_name, user_id, e, exc_info=True)
-        ConversationFlow.clear_flow(user_id)
-        send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
-        send_main_menu(phone)
+        try:
+            ConversationFlow.clear_flow(user_id)
+        except Exception:
+            pass
+        try:
+            send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
+            send_main_menu(phone)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -449,7 +455,7 @@ def _finalize_task(user_id, phone, flow_data):
         'title': title,
         'task_type': task_type,
         'due_date': due_date.isoformat(),
-        'created_via': 'whatsapp',
+        'created_via': 'whatsapp_text',
     }
     task_id = create_task(user_id, task_data)
     if task_id:
@@ -525,7 +531,7 @@ def _finalize_delegation(user_id, phone, flow_data):
         'title': flow_data['task_title'],
         'task_type': 'delegated',
         'due_date': due_date.isoformat(),
-        'created_via': 'whatsapp',
+        'created_via': 'whatsapp_text',
     }
     task_id = create_task(user_id, task_data)
     assignee = flow_data['assignee']

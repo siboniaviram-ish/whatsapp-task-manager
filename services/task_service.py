@@ -81,6 +81,7 @@ def create_task(user_id, data):
     Returns:
         The new task's ID, or None on failure.
     """
+    db = None
     try:
         db = get_db()
         cursor = db.execute(
@@ -105,10 +106,12 @@ def create_task(user_id, data):
         )
         db.commit()
         task_id = cursor.lastrowid
-        db.close()
         return task_id
     except Exception:
         return None
+    finally:
+        if db:
+            db.close()
 
 
 def update_task(task_id, data):
