@@ -94,6 +94,7 @@ def handle_incoming_message(from_number, message_body, message_type='text',
 
         # --- Voice messages ---
         if message_type == 'voice' and media_url:
+            logger.info("Processing voice message from %s, media_url=%s", from_number, media_url[:60] if media_url else '')
             flow_name, flow_data = ConversationFlow.get_flow(user_id)
             if flow_name == 'voice_pending':
                 # Re-record while confirming
@@ -107,6 +108,23 @@ def handle_incoming_message(from_number, message_body, message_type='text',
                 return _handle_voice_in_flow(user_id, from_number, media_url, flow_name, flow_data)
             else:
                 return _handle_voice_standalone(user_id, from_number, media_url)
+
+        # --- Contact shared (vCard) ---
+        if message_type == 'contact' and message_body:
+            flow_name, flow_data = ConversationFlow.get_flow(user_id)
+            if flow_name in ('delegate', 'meeting'):
+                # Route vCard content through the active flow as text
+                text = message_body
+                action_id = _resolve_action_id(None, None, text)
+                return _handle_flow(user_id, from_number, text, action_id, flow_name, flow_data)
+            else:
+                # Not in a relevant flow - show helpful message
+                vcard_phone, vcard_name = _parse_vcard(message_body)
+                if vcard_phone:
+                    display = vcard_name or vcard_phone
+                    send_text(from_number, f"📱 קיבלתי את איש הקשר *{display}*.\nכדי להעביר משימה, בחר *האצלת משימה* מהתפריט:")
+                send_main_menu(from_number)
+                return
 
         # --- Text / button messages ---
         text = (message_body or '').strip()
@@ -124,8 +142,11 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         if flow_name:
             return _handle_flow(user_id, from_number, text, action_id, flow_name, flow_data)
 
-        # Global actions (from success buttons)
-        if action_id in ('main_menu', 'my_tasks', 'new_task', 'my_meetings', 'schedule_meeting'):
+        # Global actions (from success buttons, reminders, invites)
+        if action_id in ('main_menu', 'my_tasks', 'new_task', 'my_meetings', 'schedule_meeting',
+                         'task_done', 'snooze_30', 'snooze_60',
+                         'accept_delegation', 'decline_delegation',
+                         'accept_meeting', 'decline_meeting', 'decline'):
             return _handle_global_action(user_id, from_number, action_id)
 
         # Command
@@ -215,6 +236,19 @@ def _handle_global_action(user_id, phone, action_id):
     elif action_id == 'schedule_meeting':
         ConversationFlow.set_flow(user_id, 'meeting', {})
         send_text(phone, "📌 מה נושא הפגישה? הקלד או הקלט:")
+    elif action_id == 'task_done':
+        _handle_task_done(user_id, phone)
+    elif action_id in ('snooze_30', 'snooze_60'):
+        minutes = 30 if action_id == 'snooze_30' else 60
+        _handle_snooze(user_id, phone, minutes)
+    elif action_id == 'accept_delegation':
+        _handle_delegation_response(user_id, phone, accepted=True)
+    elif action_id in ('decline_delegation', 'decline'):
+        _handle_delegation_response(user_id, phone, accepted=False)
+    elif action_id == 'accept_meeting':
+        _handle_meeting_response(user_id, phone, accepted=True)
+    elif action_id == 'decline_meeting':
+        _handle_meeting_response(user_id, phone, accepted=False)
 
 
 # ---------------------------------------------------------------------------
@@ -475,6 +509,7 @@ def _finalize_task(user_id, phone, flow_data):
         f"📋 {DASHBOARD_URL}/tasks"
     )
     send_task_success(phone, msg)
+    send_main_menu(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -486,14 +521,22 @@ def _handle_delegate(user_id, phone, text, action_id, flow_data):
     if 'task_title' not in flow_data:
         flow_data['task_title'] = text
         ConversationFlow.set_flow(user_id, 'delegate', flow_data)
-        send_text(phone, "👤 למי לשלוח? שלח מספר טלפון (למשל: 0501234567):")
+        send_text(phone, "👤 למי להעביר?\nשתף איש קשר מהטלפון 📱")
         return
 
-    # Step 2: assignee
+    # Step 2: assignee (shared contact vCard only)
     if 'assignee' not in flow_data:
-        flow_data['assignee'] = text.strip()
-        ConversationFlow.set_flow(user_id, 'delegate', flow_data)
-        send_date_select(phone)
+        vcard_phone, vcard_name = _parse_vcard(text)
+        if vcard_phone:
+            flow_data['assignee'] = vcard_phone
+            if vcard_name:
+                flow_data['assignee_name'] = vcard_name
+            ConversationFlow.set_flow(user_id, 'delegate', flow_data)
+            send_date_select(phone)
+            return
+
+        # Not a contact - prompt again
+        send_text(phone, "📱 שתף איש קשר מהטלפון כדי להמשיך.\nלחץ על 📎 ובחר *איש קשר*.")
         return
 
     # Step 3: due date
@@ -535,6 +578,7 @@ def _finalize_delegation(user_id, phone, flow_data):
     }
     task_id = create_task(user_id, task_data)
     assignee = flow_data['assignee']
+    assignee_name = flow_data.get('assignee_name', '')
 
     if task_id:
         db = None
@@ -543,7 +587,7 @@ def _finalize_delegation(user_id, phone, flow_data):
             db.execute(
                 "INSERT INTO delegated_tasks (task_id, delegator_id, assignee_phone, assignee_name, "
                 "status, message_sent_at) VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)",
-                (task_id, user_id, assignee, assignee),
+                (task_id, user_id, assignee, assignee_name or assignee),
             )
             db.commit()
         except Exception as e:
@@ -555,6 +599,7 @@ def _finalize_delegation(user_id, phone, flow_data):
                 db.close()
 
     display_date = due_date.strftime('%d/%m/%Y')
+    display_assignee = assignee_name or assignee
 
     # Send invite to assignee
     invite_msg = (
@@ -571,12 +616,13 @@ def _finalize_delegation(user_id, phone, flow_data):
 
     msg = (
         f"✅ המשימה הועברה בהצלחה!\n\n"
-        f"👤 נשלח אל: *{assignee}*\n"
+        f"👤 נשלח אל: *{display_assignee}*\n"
         f"📌 משימה: *{flow_data['task_title']}*\n"
         f"📅 תאריך יעד: {display_date}\n\n"
         f"📋 {DASHBOARD_URL}/delegation"
     )
     send_delegate_success(phone, msg)
+    send_main_menu(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -625,20 +671,55 @@ def _handle_meeting(user_id, phone, text, action_id, flow_data):
         if time_val:
             flow_data['time'] = time_val
             ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_text(phone, "👥 מי המשתתפים?\nשלח מספרי טלפון מופרדים בפסיקים:")
+            send_text(phone, "👥 מי המשתתפים?\nשלח מספרי טלפון מופרדים בפסיקים\nאו שתף אנשי קשר מהטלפון 📱")
             return
         send_time_select(phone)
         return
 
-    # Step 4: participants
+    # Step 4: participants (phone numbers or shared vCard contact)
     if 'participants' not in flow_data:
-        parts = [p.strip() for p in text.split(',') if p.strip()]
-        if parts:
-            flow_data['participants'] = parts
+        # Try vCard first (shared contact)
+        vcard_phone, _ = _parse_vcard(text)
+        if vcard_phone:
+            existing = flow_data.get('_collecting_participants', [])
+            existing.append(vcard_phone)
+            flow_data['_collecting_participants'] = existing
+            send_text(phone, f"✅ נוסף: {vcard_phone}\nשתף עוד איש קשר, שלח מספרים בפסיקים, או שלח *סיום* לסיום:")
+            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
+            return
+
+        # Check for "done" to finalize participant collection
+        if text.strip() in ('סיום', 'done', 'סיים') and flow_data.get('_collecting_participants'):
+            flow_data['participants'] = flow_data.pop('_collecting_participants')
             ConversationFlow.set_flow(user_id, 'meeting', flow_data)
             send_location_select(phone)
             return
-        send_text(phone, "👥 שלח לפחות מספר טלפון אחד:")
+
+        # Try comma-separated phone numbers
+        raw_parts = [p.strip() for p in text.split(',') if p.strip()]
+        normalized_parts = []
+        invalid = []
+        for p in raw_parts:
+            n = _normalize_phone(p)
+            if n:
+                normalized_parts.append(n)
+            else:
+                invalid.append(p)
+        if invalid:
+            send_text(phone, f"❌ מספרים לא תקינים: {', '.join(invalid)}\nשלח מספרי טלפון מופרדים בפסיקים\nאו שתף איש קשר מהטלפון 📱")
+            return
+
+        # Merge with any previously collected contacts
+        existing = flow_data.get('_collecting_participants', [])
+        normalized_parts = existing + normalized_parts
+
+        if normalized_parts:
+            flow_data.pop('_collecting_participants', None)
+            flow_data['participants'] = normalized_parts
+            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
+            send_location_select(phone)
+            return
+        send_text(phone, "👥 שלח לפחות מספר טלפון אחד\nאו שתף איש קשר מהטלפון 📱:")
         return
 
     # Step 5: location
@@ -743,6 +824,160 @@ def _finalize_meeting(user_id, phone, flow_data):
         f"📅 {DASHBOARD_URL}/calendar"
     )
     send_meeting_success(phone, msg)
+    send_main_menu(phone)
+
+
+# ---------------------------------------------------------------------------
+# Reminder / Invite response handlers
+# ---------------------------------------------------------------------------
+
+def _handle_task_done(user_id, phone):
+    """Mark the user's most recent pending task as completed (from reminder button)."""
+    db = None
+    try:
+        db = get_db()
+        task = db.execute(
+            "SELECT id, title FROM tasks WHERE user_id = ? AND status = 'pending' "
+            "ORDER BY due_date ASC, created_at DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if task:
+            complete_task(task['id'])
+            send_text(phone, f"🎉 המשימה \"{task['title']}\" סומנה כבוצעה! ✔️")
+        else:
+            send_text(phone, "🎉 אין משימות פתוחות!")
+    except Exception as e:
+        logger.error("Error marking task done: %s", e, exc_info=True)
+        send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
+    finally:
+        if db:
+            db.close()
+    send_main_menu(phone)
+
+
+def _handle_snooze(user_id, phone, minutes):
+    """Snooze: create a new reminder N minutes from now for the user's most recent task."""
+    from services.reminder_service import create_reminders_for_task
+    db = None
+    try:
+        db = get_db()
+        task = db.execute(
+            "SELECT id, title FROM tasks WHERE user_id = ? AND status = 'pending' "
+            "ORDER BY due_date ASC, created_at DESC LIMIT 1",
+            (user_id,),
+        ).fetchone()
+        if task:
+            scheduled_time = (datetime.now() + timedelta(minutes=minutes)).isoformat()
+            db.execute(
+                "INSERT INTO reminders (task_id, user_id, reminder_type, scheduled_time, status, message_template) "
+                "VALUES (?, ?, 'follow_up', ?, 'pending', ?)",
+                (task['id'], user_id, scheduled_time, f"Snooze reminder for {task['title']}"),
+            )
+            db.commit()
+            send_text(phone, f"⏰ תזכורת נדחתה ב-{minutes} דקות למשימה \"{task['title']}\".")
+        else:
+            send_text(phone, "אין משימות פתוחות לדחיית תזכורת.")
+    except Exception as e:
+        logger.error("Error snoozing: %s", e, exc_info=True)
+        send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
+    finally:
+        if db:
+            db.close()
+
+
+def _handle_delegation_response(user_id, phone, accepted):
+    """Handle accept/decline of a delegated task (from the assignee's side)."""
+    db = None
+    try:
+        db = get_db()
+        delegation = db.execute(
+            "SELECT dt.id, dt.task_id, dt.delegator_id, t.title "
+            "FROM delegated_tasks dt JOIN tasks t ON dt.task_id = t.id "
+            "WHERE dt.assignee_phone = ? AND dt.status = 'pending' "
+            "ORDER BY dt.message_sent_at DESC LIMIT 1",
+            (phone,),
+        ).fetchone()
+        if not delegation:
+            send_text(phone, "אין הזמנות ממתינות.")
+            send_main_menu(phone)
+            return
+
+        new_status = 'accepted' if accepted else 'rejected'
+        db.execute(
+            "UPDATE delegated_tasks SET status = ?, accepted_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (new_status, delegation['id']),
+        )
+        db.commit()
+
+        if accepted:
+            send_text(phone, f"✅ קיבלת את המשימה \"{delegation['title']}\"!")
+        else:
+            send_text(phone, f"❌ דחית את המשימה \"{delegation['title']}\".")
+
+        # Notify the delegator
+        delegator = db.execute(
+            "SELECT phone_number FROM users WHERE id = ?",
+            (delegation['delegator_id'],),
+        ).fetchone()
+        if delegator:
+            status_text = "קיבל/ה" if accepted else "דחה/תה"
+            send_text(
+                delegator['phone_number'],
+                f"📬 {phone} {status_text} את המשימה \"{delegation['title']}\".",
+            )
+    except Exception as e:
+        logger.error("Error handling delegation response: %s", e, exc_info=True)
+        send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
+    finally:
+        if db:
+            db.close()
+    send_main_menu(phone)
+
+
+def _handle_meeting_response(user_id, phone, accepted):
+    """Handle accept/decline of a meeting invite (from the participant's side)."""
+    from services.meeting_service import respond_to_meeting
+    db = None
+    try:
+        db = get_db()
+        participant = db.execute(
+            "SELECT mp.meeting_id, m.title, m.organizer_id "
+            "FROM meeting_participants mp JOIN meetings m ON mp.meeting_id = m.id "
+            "WHERE mp.phone_number = ? AND mp.status = 'pending' "
+            "ORDER BY m.meeting_date ASC LIMIT 1",
+            (phone,),
+        ).fetchone()
+        if not participant:
+            send_text(phone, "אין הזמנות לפגישות ממתינות.")
+            send_main_menu(phone)
+            return
+
+        new_status = 'accepted' if accepted else 'declined'
+        respond_to_meeting(participant['meeting_id'], phone, new_status)
+
+        if accepted:
+            send_text(phone, f"✅ אישרת את הפגישה \"{participant['title']}\"!")
+        else:
+            send_text(phone, f"❌ דחית את הפגישה \"{participant['title']}\".")
+
+        # Notify the organizer
+        organizer = db.execute(
+            "SELECT phone_number FROM users WHERE id = ?",
+            (participant['organizer_id'],),
+        ).fetchone()
+        if organizer:
+            status_text = "אישר/ה" if accepted else "דחה/תה"
+            send_text(
+                organizer['phone_number'],
+                f"📬 {phone} {status_text} את הפגישה \"{participant['title']}\".",
+            )
+    except Exception as e:
+        logger.error("Error handling meeting response: %s", e, exc_info=True)
+        send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
+    finally:
+        if db:
+            db.close()
+    send_main_menu(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -868,6 +1103,71 @@ def _resolve_location(text, action_id):
     return None
 
 
+def _parse_vcard(text):
+    """Extract phone number and name from a vCard string shared via WhatsApp.
+
+    Returns:
+        tuple: (phone, name) or (None, None) if not a vCard or no phone found.
+    """
+    if not text or 'BEGIN:VCARD' not in text:
+        return None, None
+
+    phone = None
+    name = None
+
+    for line in text.splitlines():
+        line = line.strip()
+        # Extract name from FN (Full Name)
+        if line.upper().startswith('FN:'):
+            name = line[3:].strip()
+        # Extract phone from TEL line
+        # Formats: TEL:+972..., TEL;type=CELL:+972..., TEL;type=CELL;waid=972...:+972...
+        elif line.upper().startswith('TEL'):
+            # The phone number is after the last colon
+            colon_idx = line.rfind(':')
+            if colon_idx != -1:
+                raw_phone = line[colon_idx + 1:].strip()
+                if raw_phone:
+                    phone = _normalize_phone(raw_phone)
+
+    return phone, name
+
+
+def _normalize_phone(text):
+    """Normalize an Israeli phone number to international format (+972...)."""
+    if not text:
+        return None
+    # Strip non-digit chars except leading +
+    cleaned = text.strip()
+    if cleaned.startswith('+'):
+        digits = '+' + re.sub(r'[^\d]', '', cleaned[1:])
+    else:
+        digits = re.sub(r'[^\d]', '', cleaned)
+
+    if not digits:
+        return None
+
+    # Already international format
+    if digits.startswith('+972') and len(digits) >= 13:
+        return digits
+    if digits.startswith('972') and len(digits) >= 12:
+        return '+' + digits
+    # Israeli local: 05xxxxxxxx
+    if digits.startswith('0') and len(digits) == 10:
+        return '+972' + digits[1:]
+    # Just digits without 0 prefix: 5xxxxxxxx
+    if len(digits) == 9 and digits.startswith('5'):
+        return '+972' + digits
+
+    # If it has enough digits, assume it's valid
+    if len(digits) >= 10:
+        if not digits.startswith('+'):
+            return '+' + digits
+        return digits
+
+    return None
+
+
 def _parse_date_text(text):
     t = (text or '').strip()
     if not t:
@@ -923,7 +1223,7 @@ def _get_flow_prompt(flow_name, flow_data):
         if 'task_title' not in flow_data:
             return "📝 מה המשימה שתרצה להעביר?"
         if 'assignee' not in flow_data:
-            return "👤 למי לשלוח? שלח מספר טלפון:"
+            return "👤 שתף איש קשר מהטלפון 📱"
         return "📅 עד מתי?"
     elif flow_name == 'meeting':
         if 'title' not in flow_data:

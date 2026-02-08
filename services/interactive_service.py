@@ -17,6 +17,9 @@ CONTENT_API_URL = "https://content.twilio.com/v1/Content"
 _template_cache = {}
 _templates_loaded = False
 
+# Cached Twilio client instance
+_twilio_client = None
+
 
 # ============ Template Definitions ============
 
@@ -235,7 +238,7 @@ def _load_existing_templates():
         return
 
     try:
-        resp = http_requests.get(CONTENT_API_URL, auth=auth, timeout=15)
+        resp = http_requests.get(CONTENT_API_URL, auth=auth, timeout=10)
         if resp.status_code == 200:
             for item in resp.json().get('contents', []):
                 name = item.get('friendly_name', '')
@@ -260,7 +263,7 @@ def _create_template(template_def):
             CONTENT_API_URL,
             json=template_def,
             auth=auth,
-            timeout=15,
+            timeout=10,
         )
         if resp.status_code in (200, 201):
             sid = resp.json().get('sid')
@@ -293,11 +296,19 @@ def _get_template_sid(template_name):
     return _create_template(tpl_def)
 
 
+def _get_twilio_client():
+    """Get or create a cached Twilio Client instance."""
+    global _twilio_client
+    if _twilio_client is None:
+        from twilio.rest import Client
+        _twilio_client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+    return _twilio_client
+
+
 def _send_with_content_sid(to_number, content_sid, variables=None):
     """Send a WhatsApp message using a Content template SID."""
     try:
-        from twilio.rest import Client
-        client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+        client = _get_twilio_client()
 
         if not to_number.startswith('whatsapp:'):
             to_number = f"whatsapp:{to_number}"
@@ -442,3 +453,12 @@ def send_meeting_invite_interactive(to_number, message):
     """Send meeting invite with accept/decline buttons."""
     fallback = message + "\n\n1️⃣ ✅ מאשר\n2️⃣ ❌ לא יכול"
     return _send_interactive("wt_meeting_invite", to_number, {"1": message}, fallback)
+
+
+def preload_templates():
+    """Pre-load all content templates at startup for faster first use."""
+    try:
+        _load_existing_templates()
+        logger.info("Templates pre-loaded: %d cached", len(_template_cache))
+    except Exception as e:
+        logger.warning("Failed to pre-load templates: %s", e)

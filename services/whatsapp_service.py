@@ -3,6 +3,17 @@ from datetime import datetime
 from database import get_db
 from config import Config
 
+# Cached Twilio client
+_client = None
+
+
+def _get_client():
+    global _client
+    if _client is None:
+        from twilio.rest import Client
+        _client = Client(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+    return _client
+
 
 def send_message(to_number, body):
     """Send a WhatsApp message via Twilio.
@@ -18,17 +29,11 @@ def send_message(to_number, body):
         Message SID string on success, None on failure or missing credentials.
     """
     try:
-        account_sid = Config.TWILIO_ACCOUNT_SID
-        auth_token = Config.TWILIO_AUTH_TOKEN
-        from_number = Config.TWILIO_WHATSAPP_NUMBER
-
-        if not account_sid or not auth_token:
-            print("[WhatsApp Service] Twilio credentials not configured. Message not sent.")
-            print(f"[WhatsApp Service] Would send to {to_number}: {body}")
+        if not Config.TWILIO_ACCOUNT_SID or not Config.TWILIO_AUTH_TOKEN:
+            print("[WhatsApp Service] Twilio credentials not configured.")
             return None
 
-        from twilio.rest import Client
-        client = Client(account_sid, auth_token)
+        client = _get_client()
 
         # Ensure WhatsApp prefix
         if not to_number.startswith('whatsapp:'):
@@ -36,7 +41,7 @@ def send_message(to_number, body):
 
         message = client.messages.create(
             body=body,
-            from_=from_number,
+            from_=Config.TWILIO_WHATSAPP_NUMBER,
             to=to_number
         )
         return message.sid

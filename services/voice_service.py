@@ -35,10 +35,10 @@ def transcribe_audio(audio_url):
             print(f"[Voice Service] Failed to download audio: HTTP {audio_response.status_code}")
             return None
 
-        # Send to Whisper API
+        # Send to Whisper API with Hebrew language hint
         headers = {"Authorization": f"Bearer {api_key}"}
         files = {"file": ("audio.ogg", audio_response.content, "audio/ogg")}
-        data = {"model": "whisper-1"}
+        data = {"model": "whisper-1", "language": "he"}
 
         response = requests.post(
             "https://api.openai.com/v1/audio/transcriptions",
@@ -89,9 +89,9 @@ def extract_task_from_transcript(transcript):
 
         # --- Extract priority ---
         priority_patterns = {
-            'urgent': r'\b(urgent|urgently|asap|immediately|critical)\b',
-            'high': r'\b(important|high priority|crucial|essential)\b',
-            'low': r'\b(low priority|whenever|no rush|not urgent|eventually)\b',
+            'urgent': r'(urgent|urgently|asap|immediately|critical|דחוף|בדחיפות|מיידי)',
+            'high': r'(important|high priority|crucial|essential|חשוב|קריטי|עדיפות גבוהה)',
+            'low': r'(low priority|whenever|no rush|not urgent|eventually|לא דחוף|בלי לחץ|כשתספיק)',
         }
         for level, pattern in priority_patterns.items():
             if re.search(pattern, text, re.IGNORECASE):
@@ -102,17 +102,17 @@ def extract_task_from_transcript(transcript):
         today = date.today()
 
         date_keywords = {
-            r'\btoday\b': today,
-            r'\btomorrow\b': today + timedelta(days=1),
-            r'\bday after tomorrow\b': today + timedelta(days=2),
-            r'\bnext week\b': today + timedelta(weeks=1),
-            r'\bnext monday\b': _next_weekday(today, 0),
-            r'\bnext tuesday\b': _next_weekday(today, 1),
-            r'\bnext wednesday\b': _next_weekday(today, 2),
-            r'\bnext thursday\b': _next_weekday(today, 3),
-            r'\bnext friday\b': _next_weekday(today, 4),
-            r'\bnext saturday\b': _next_weekday(today, 5),
-            r'\bnext sunday\b': _next_weekday(today, 6),
+            r'(today|היום)': today,
+            r'(tomorrow|מחר)': today + timedelta(days=1),
+            r'(day after tomorrow|מחרתיים)': today + timedelta(days=2),
+            r'(next week|שבוע הבא)': today + timedelta(weeks=1),
+            r'(next monday|יום שני הבא)': _next_weekday(today, 0),
+            r'(next tuesday|יום שלישי הבא)': _next_weekday(today, 1),
+            r'(next wednesday|יום רביעי הבא)': _next_weekday(today, 2),
+            r'(next thursday|יום חמישי הבא)': _next_weekday(today, 3),
+            r'(next friday|יום שישי הבא)': _next_weekday(today, 4),
+            r'(next saturday|שבת הבאה)': _next_weekday(today, 5),
+            r'(next sunday|יום ראשון הבא)': _next_weekday(today, 6),
         }
 
         for pattern, target_date in date_keywords.items():
@@ -146,6 +146,10 @@ def extract_task_from_transcript(transcript):
             r'^(i need to|i have to|i want to|i should)\s+',
             r'^(create a task to|add a task to|add task)\s+',
             r'^(task|note|reminder)[:\s]+',
+            r'^(תזכיר לי ל?|תזכיר לי)\s*',
+            r'^(אני צריך ל?|אני רוצה ל?|צריך ל?|רוצה ל?)\s*',
+            r'^(משימה חדשה|צור משימה|הוסף משימה)[:\s]*',
+            r'^(משימה|תזכורת|הערה)[:\s]*',
         ]
         for prefix in remove_prefixes:
             title_text = re.sub(prefix, '', title_text, flags=re.IGNORECASE)

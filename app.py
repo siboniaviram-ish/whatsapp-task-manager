@@ -139,25 +139,49 @@ def register():
 def whatsapp_webhook():
     try:
         from bot.handlers import handle_incoming_message
+        import requests as http_requests
 
         from_number = request.values.get('From', '')
         body = request.values.get('Body', '')
         num_media = int(request.values.get('NumMedia', 0))
-        media_url = request.values.get('MediaUrl0', None) if num_media > 0 else None
-        media_type = request.values.get('MediaContentType0', '') if num_media > 0 else ''
+
+        # Always check for media URL (some edge cases report NumMedia=0 with media)
+        media_url = request.values.get('MediaUrl0', None)
+        media_type = request.values.get('MediaContentType0', '') or ''
 
         # Interactive message responses (buttons / lists)
         button_payload = request.values.get('ButtonPayload', '') or None
         list_id = request.values.get('ListId', '') or None
 
-        message_type = 'text'
-        if media_url and 'audio' in media_type:
-            message_type = 'voice'
-
         # Clean phone number
         phone = from_number.replace('whatsapp:', '')
 
-        logger.info(f"Webhook received: From={from_number}, Body={body[:50] if body else ''}, ButtonPayload={button_payload}, ListId={list_id}")
+        logger.info(
+            "Webhook received: From=%s, Body=%s, NumMedia=%s, MediaType=%s, MediaUrl=%s, ButtonPayload=%s, ListId=%s",
+            from_number, body[:50] if body else '', num_media, media_type,
+            media_url[:60] if media_url else '', button_payload, list_id,
+        )
+
+        # Determine message type
+        message_type = 'text'
+        if media_url and 'audio' in media_type.lower():
+            message_type = 'voice'
+        elif media_url and 'vcard' in media_type.lower():
+            # Shared contact: download vCard content and put it in the body
+            message_type = 'contact'
+            try:
+                auth = None
+                if Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN:
+                    auth = (Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN)
+                vcard_resp = http_requests.get(media_url, auth=auth, timeout=10)
+                if vcard_resp.status_code == 200:
+                    body = vcard_resp.text
+                    logger.info("Downloaded vCard content: %s", body[:100])
+                else:
+                    logger.warning("Failed to download vCard: HTTP %s", vcard_resp.status_code)
+            except Exception as e:
+                logger.warning("Error downloading vCard: %s", e)
+
         handle_incoming_message(phone, body, message_type, media_url, button_payload, list_id)
 
         # Return empty TwiML response (messages are sent via REST API)
@@ -550,8 +574,13 @@ def setup_scheduler():
         logger.warning(f"Scheduler not started: {e}")
 
 
-# Start scheduler for both gunicorn and direct run
+# Start scheduler and pre-load templates
 setup_scheduler()
+try:
+    from services.interactive_service import preload_templates
+    preload_templates()
+except Exception as e:
+    logger.warning(f"Template pre-load failed: {e}")
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8080)

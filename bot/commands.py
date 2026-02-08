@@ -32,7 +32,7 @@ MENU_SELECTIONS = {
     '2': 'task_scheduled',
     '3': 'task_delegate',
     '4': 'schedule_meeting',
-    '5': 'voice_task',
+    '5': 'my_tasks',
 }
 
 # Confirmation responses used in flows
