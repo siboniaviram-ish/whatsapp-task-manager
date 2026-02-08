@@ -49,6 +49,18 @@ def rows_to_list(rows):
     return [dict(r) for r in rows]
 
 
+# ============ HEALTH CHECK ============
+
+@app.route('/health')
+def health_check():
+    return jsonify({
+        'status': 'ok',
+        'twilio_configured': bool(Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN),
+        'twilio_sid_prefix': Config.TWILIO_ACCOUNT_SID[:6] + '...' if Config.TWILIO_ACCOUNT_SID else 'NOT SET',
+        'whatsapp_number': Config.TWILIO_WHATSAPP_NUMBER or 'NOT SET',
+    })
+
+
 # ============ PAGE ROUTES ============
 
 @app.route('/')
