@@ -146,6 +146,10 @@ def whatsapp_webhook():
         media_url = request.values.get('MediaUrl0', None) if num_media > 0 else None
         media_type = request.values.get('MediaContentType0', '') if num_media > 0 else ''
 
+        # Interactive message responses (buttons / lists)
+        button_payload = request.values.get('ButtonPayload', '') or None
+        list_id = request.values.get('ListId', '') or None
+
         message_type = 'text'
         if media_url and 'audio' in media_type:
             message_type = 'voice'
@@ -153,8 +157,8 @@ def whatsapp_webhook():
         # Clean phone number
         phone = from_number.replace('whatsapp:', '')
 
-        logger.info(f"Webhook received: From={from_number}, Body={body[:50] if body else ''}")
-        handle_incoming_message(phone, body, message_type, media_url)
+        logger.info(f"Webhook received: From={from_number}, Body={body[:50] if body else ''}, ButtonPayload={button_payload}, ListId={list_id}")
+        handle_incoming_message(phone, body, message_type, media_url, button_payload, list_id)
 
         # Return empty TwiML response (messages are sent via REST API)
         return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {'Content-Type': 'text/xml'}
@@ -501,7 +505,7 @@ def setup_scheduler():
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from services.reminder_service import process_due_reminders, mark_reminder_sent
-        from services.whatsapp_service import send_reminder
+        from services.interactive_service import send_reminder_interactive
 
         scheduler = BackgroundScheduler()
 
@@ -510,11 +514,30 @@ def setup_scheduler():
                 due = process_due_reminders()
                 for reminder in due:
                     try:
-                        send_reminder(reminder['user_id'], reminder)
+                        title = reminder.get('task_title', reminder.get('title', 'משימה'))
+                        due_date = reminder.get('due_date', '')
+                        due_time = reminder.get('due_time', '')
+                        time_str = f" בשעה {due_time}" if due_time else ''
+
+                        msg = (
+                            f"⏰ *תזכורת!*\n\n"
+                            f"📌 משימה: *{title}*\n"
+                            f"📅 תאריך יעד: {due_date}{time_str}"
+                        )
+
+                        # Get the user's phone number
+                        db = get_db()
+                        user = db.execute(
+                            "SELECT phone_number FROM users WHERE id = ?",
+                            (reminder['user_id'],)
+                        ).fetchone()
+                        db.close()
+
+                        if user:
+                            send_reminder_interactive(user['phone_number'], msg)
                     except Exception as e:
                         logger.error(f"Failed to send reminder: {e}")
                     finally:
-                        # Always mark as sent to prevent infinite retries
                         try:
                             mark_reminder_sent(reminder['reminder_id'])
                         except Exception:

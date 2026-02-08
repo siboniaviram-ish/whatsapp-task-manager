@@ -10,6 +10,7 @@ HEBREW_COMMANDS = {
     'עזרה': 'help',
     'היי': 'welcome',
     'שלום': 'welcome',
+    'תפריט': 'welcome',
     'בוצע': 'complete',
     'תזכורות': 'reminders',
     'פגישות': 'meetings',
@@ -46,7 +47,7 @@ CONFIRMATIONS = {
 }
 
 # Cancel keywords that abort any active flow
-CANCEL_KEYWORDS = {'ביטול', 'בטל', 'cancel', 'חזור', 'תפריט'}
+CANCEL_KEYWORDS = {'ביטול', 'בטל', 'cancel', 'חזור'}
 
 
 def get_command(text):
