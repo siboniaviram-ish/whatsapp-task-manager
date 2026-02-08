@@ -141,11 +141,14 @@ def whatsapp_webhook():
         # Clean phone number
         phone = from_number.replace('whatsapp:', '')
 
-        response = handle_incoming_message(phone, body, message_type, media_url)
-        return response or '', 200
+        logger.info(f"Webhook received: From={from_number}, Body={body[:50] if body else ''}")
+        handle_incoming_message(phone, body, message_type, media_url)
+
+        # Return empty TwiML response (messages are sent via REST API)
+        return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {'Content-Type': 'text/xml'}
     except Exception as e:
-        logger.error(f"Webhook error: {e}")
-        return 'Error', 500
+        logger.error(f"Webhook error: {e}", exc_info=True)
+        return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {'Content-Type': 'text/xml'}
 
 
 @app.route('/webhook/whatsapp/status', methods=['POST'])
@@ -485,7 +488,7 @@ def api_parse_task():
 def setup_scheduler():
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
-        from services.reminder_service import process_due_reminders
+        from services.reminder_service import process_due_reminders, mark_reminder_sent
         from services.whatsapp_service import send_reminder
 
         scheduler = BackgroundScheduler()
@@ -498,6 +501,12 @@ def setup_scheduler():
                         send_reminder(reminder['user_id'], reminder)
                     except Exception as e:
                         logger.error(f"Failed to send reminder: {e}")
+                    finally:
+                        # Always mark as sent to prevent infinite retries
+                        try:
+                            mark_reminder_sent(reminder['reminder_id'])
+                        except Exception:
+                            pass
 
         scheduler.add_job(check_reminders, 'interval', seconds=Config.REMINDER_CHECK_INTERVAL)
         scheduler.start()

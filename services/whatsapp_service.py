@@ -70,7 +70,7 @@ def send_reminder(user_id, task):
             return None
 
         name = user['name'] or 'there'
-        title = task.get('title', 'Untitled task')
+        title = task.get('task_title', task.get('title', 'Untitled task'))
         due_date = task.get('due_date', '')
         due_time = task.get('due_time', '')
         priority = task.get('priority', 'medium')
