@@ -1,14 +1,14 @@
 import json
 import re
+import logging
 from datetime import datetime, date, timedelta
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 
 def transcribe_audio(audio_url):
     """Transcribe audio from a URL using OpenAI Whisper API.
-
-    Falls back to a mock transcription when no API key is configured,
-    making development and testing possible without external services.
 
     Args:
         audio_url: URL of the audio file to transcribe.
@@ -20,7 +20,7 @@ def transcribe_audio(audio_url):
         api_key = Config.OPENAI_API_KEY
 
         if not api_key:
-            print("[Voice Service] OpenAI API key not configured.")
+            logger.error("OpenAI API key not configured - voice transcription disabled")
             return None
 
         import requests
@@ -30,10 +30,13 @@ def transcribe_audio(audio_url):
         twilio_token = Config.TWILIO_AUTH_TOKEN
         auth = (twilio_sid, twilio_token) if twilio_sid and twilio_token else None
 
+        logger.info("Downloading audio from: %s", audio_url[:80] if audio_url else '')
         audio_response = requests.get(audio_url, timeout=30, auth=auth)
         if audio_response.status_code != 200:
-            print(f"[Voice Service] Failed to download audio: HTTP {audio_response.status_code}")
+            logger.error("Failed to download audio: HTTP %s", audio_response.status_code)
             return None
+
+        logger.info("Audio downloaded: %d bytes, sending to Whisper", len(audio_response.content))
 
         # Send to Whisper API with Hebrew language hint
         headers = {"Authorization": f"Bearer {api_key}"}
@@ -50,16 +53,18 @@ def transcribe_audio(audio_url):
 
         if response.status_code == 200:
             result = response.json()
-            return result.get('text', '')
+            transcript = result.get('text', '')
+            logger.info("Whisper transcription: '%s'", transcript[:100] if transcript else '(empty)')
+            return transcript
         else:
-            print(f"[Voice Service] Whisper API error: {response.status_code} - {response.text}")
+            logger.error("Whisper API error: %s - %s", response.status_code, response.text[:200])
             return None
 
     except ImportError:
-        print("[Voice Service] requests library not installed. Run: pip install requests")
+        logger.error("requests library not installed")
         return None
     except Exception as e:
-        print(f"[Voice Service] Transcription error: {e}")
+        logger.error("Transcription error: %s", e, exc_info=True)
         return None
 
 

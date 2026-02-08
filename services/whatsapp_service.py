@@ -1,7 +1,10 @@
 import sqlite3
+import logging
 from datetime import datetime
 from database import get_db
 from config import Config
+
+logger = logging.getLogger(__name__)
 
 # Cached Twilio client
 _client = None
@@ -18,9 +21,6 @@ def _get_client():
 def send_message(to_number, body):
     """Send a WhatsApp message via Twilio.
 
-    Gracefully handles missing credentials by logging a warning and returning
-    False instead of raising an exception.
-
     Args:
         to_number: Recipient phone number (e.g. '+972501234567').
         body: Message text to send.
@@ -30,7 +30,7 @@ def send_message(to_number, body):
     """
     try:
         if not Config.TWILIO_ACCOUNT_SID or not Config.TWILIO_AUTH_TOKEN:
-            print("[WhatsApp Service] Twilio credentials not configured.")
+            logger.error("Twilio credentials not configured")
             return None
 
         client = _get_client()
@@ -44,12 +44,13 @@ def send_message(to_number, body):
             from_=Config.TWILIO_WHATSAPP_NUMBER,
             to=to_number
         )
+        logger.info("Message sent to %s: SID=%s", to_number, message.sid)
         return message.sid
     except ImportError:
-        print("[WhatsApp Service] Twilio library not installed. Run: pip install twilio")
+        logger.error("Twilio library not installed")
         return None
     except Exception as e:
-        print(f"[WhatsApp Service] Error sending message: {e}")
+        logger.error("Error sending message to %s: %s", to_number, e)
         return None
 
 

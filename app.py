@@ -55,9 +55,11 @@ def rows_to_list(rows):
 def health_check():
     return jsonify({
         'status': 'ok',
+        'version': '2.1',
         'twilio_configured': bool(Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN),
         'twilio_sid_prefix': Config.TWILIO_ACCOUNT_SID[:6] + '...' if Config.TWILIO_ACCOUNT_SID else 'NOT SET',
         'whatsapp_number': Config.TWILIO_WHATSAPP_NUMBER or 'NOT SET',
+        'openai_configured': bool(Config.OPENAI_API_KEY),
     })
 
 
@@ -189,6 +191,35 @@ def whatsapp_webhook():
     except Exception as e:
         logger.error(f"Webhook error: {e}", exc_info=True)
         return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {'Content-Type': 'text/xml'}
+
+
+@app.route('/debug/send-test', methods=['POST'])
+def debug_send_test():
+    """Debug endpoint: simulate processing a message and return diagnostics."""
+    phone = request.values.get('phone', '')
+    body = request.values.get('body', 'היי')
+    results = {'phone': phone, 'body': body, 'steps': []}
+
+    if not phone:
+        return jsonify({'error': 'phone parameter required'}), 400
+
+    # Step 1: Test plain text send
+    try:
+        from services.whatsapp_service import send_message
+        sid = send_message(phone, f"🔧 Debug test message")
+        results['steps'].append({'send_message': 'OK' if sid else 'FAILED', 'sid': sid})
+    except Exception as e:
+        results['steps'].append({'send_message': f'ERROR: {e}'})
+
+    # Step 2: Test interactive send
+    try:
+        from services.interactive_service import send_main_menu
+        sid2 = send_main_menu(phone)
+        results['steps'].append({'send_main_menu': 'OK' if sid2 else 'FAILED', 'sid': sid2})
+    except Exception as e:
+        results['steps'].append({'send_main_menu': f'ERROR: {e}'})
+
+    return jsonify(results)
 
 
 @app.route('/webhook/whatsapp/status', methods=['POST'])
