@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Task Management Dashboard - White Edition</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "pure-white": "#FFFFFF",
+                        "soft-gray": "#F9FAFB",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(0, 0, 0, 0.05)',
+                        'card': '0 2px 12px -1px rgba(0, 0, 0, 0.04)',
+                    }
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FFFFFF;
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-pure-white font-display text-gray-950 min-h-screen">
+<div class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden max-w-[430px] mx-auto bg-pure-white shadow-2xl">
+<header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md px-4 py-4 border-b border-gray-50">
+<div class="flex items-center justify-between mb-4">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20">
+<div class="w-full h-full bg-cover bg-center" data-alt="User profile avatar close up" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAAB58fuwi8Cof9MO323WReRXFQ1x6WMgcsc_OEzPzpRYJUTZWdfm30GtEhDT_XFoZ29hih7L57ZsmOzd0f9MjzWekjFCrpxXgK84ptt1HEoUU47KADe1i818P1FxLwjupmQ_yMlNdK9CbX9Qr2gE-ShKLwJHOR9ifV8bLYjps2YnbVQeBJTA58pNEAwPVtN7dZrUGFdK-urh3Nb_F3Ej_VyEHwKj4qXQa1SCtOgFeZxVo60jcuVIO4kjgfA6DI9U6R4sh1BddyDhI");'></div>
+</div>
+<div>
+<p class="text-[11px] text-gray-500 font-medium uppercase tracking-wider">Welcome back,</p>
+<h1 class="text-lg font-bold text-gray-900 leading-tight">Alex Thompson</h1>
+</div>
+</div>
+<div class="flex gap-2">
+<button class="size-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 border border-gray-100">
+<span class="material-symbols-outlined text-xl">notifications</span>
+</button>
+<button class="size-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 border border-gray-100">
+<span class="material-symbols-outlined text-xl">search</span>
+</button>
+</div>
+</div>
+<div class="bg-primary/[0.03] rounded-2xl p-4 border border-primary/10 shadow-soft">
+<div class="flex items-center justify-between mb-3">
+<div class="flex items-center gap-2">
+<span class="relative flex h-2.5 w-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+</span>
+<p class="text-sm font-bold text-primary tracking-tight">Voice Sync Active</p>
+</div>
+<span class="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">LIVE</span>
+</div>
+<div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-3">
+<div class="bg-primary h-full w-[85%] rounded-full shadow-[0_0_8px_rgba(19,127,236,0.3)]"></div>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary/70">sync</span>
+<p class="text-xs text-gray-500 font-medium">Synced with WhatsApp 2m ago</p>
+</div>
+<span class="material-symbols-outlined text-gray-300 text-lg">more_horiz</span>
+</div>
+</div>
+</header>
+<main class="flex-1 px-4 pb-28">
+<section class="mt-8">
+<div class="flex items-center justify-between mb-5">
+<h2 class="text-xl font-bold tracking-tight text-gray-900">Today's Focus</h2>
+<button class="text-primary text-sm font-bold bg-primary/5 px-3 py-1 rounded-full">View All</button>
+</div>
+<div class="flex gap-4 overflow-x-auto hide-scrollbar -mx-4 px-4 pb-4">
+<div class="flex-shrink-0 w-72 bg-white rounded-2xl p-5 shadow-card border border-gray-100">
+<div class="flex justify-between items-start mb-4">
+<span class="bg-blue-50 text-primary text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wide">High Priority</span>
+<div class="flex items-center gap-1 bg-green-50 px-2 py-1 rounded-md">
+<span class="material-symbols-outlined text-[14px] text-green-600">chat_bubble</span>
+<span class="text-[10px] font-bold text-green-600 uppercase">WA</span>
+</div>
+</div>
+<h3 class="font-bold text-lg mb-2 leading-tight text-gray-900">Review Q3 Budget Plan</h3>
+<p class="text-sm text-gray-500 mb-5 leading-relaxed">Submit to finance team for final approval before EOD.</p>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5 text-gray-400">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+<span class="text-xs font-medium">Due 2:00 PM</span>
+</div>
+<button class="bg-primary text-white size-9 rounded-xl flex items-center justify-center shadow-md shadow-primary/20">
+<span class="material-symbols-outlined text-xl">check</span>
+</button>
+</div>
+</div>
+<div class="flex-shrink-0 w-72 bg-white rounded-2xl p-5 shadow-card border border-gray-100">
+<div class="flex justify-between items-start mb-4">
+<span class="bg-gray-50 text-gray-500 text-[10px] font-bold px-2.5 py-1 rounded-md uppercase tracking-wide">Medium</span>
+<div class="flex items-center gap-1 bg-blue-50 px-2 py-1 rounded-md">
+<span class="material-symbols-outlined text-[14px] text-primary">mic</span>
+<span class="text-[10px] font-bold text-primary uppercase">VOICE</span>
+</div>
+</div>
+<h3 class="font-bold text-lg mb-2 leading-tight text-gray-900">Prepare Client Brief</h3>
+<p class="text-sm text-gray-500 mb-5 leading-relaxed">Summarized from your 3min voice note this morning.</p>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5 text-gray-400">
+<span class="material-symbols-outlined text-[18px]">schedule</span>
+<span class="text-xs font-medium">Due 5:30 PM</span>
+</div>
+<button class="bg-gray-50 text-gray-300 size-9 rounded-xl flex items-center justify-center border border-gray-100">
+<span class="material-symbols-outlined text-xl">check</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<section class="mt-8">
+<h2 class="text-[15px] font-bold mb-4 text-gray-400 uppercase tracking-widest px-1">Categories</h2>
+<div class="flex gap-2.5 overflow-x-auto hide-scrollbar pb-2">
+<button class="px-6 py-2.5 bg-primary text-white rounded-full text-sm font-bold whitespace-nowrap shadow-sm">All Tasks</button>
+<button class="px-6 py-2.5 bg-white border border-gray-100 text-gray-600 rounded-full text-sm font-semibold whitespace-nowrap shadow-sm">Personal</button>
+<button class="px-6 py-2.5 bg-white border border-gray-100 text-gray-600 rounded-full text-sm font-semibold whitespace-nowrap shadow-sm">Reminders</button>
+<button class="px-6 py-2.5 bg-white border border-gray-100 text-gray-600 rounded-full text-sm font-semibold whitespace-nowrap shadow-sm">Shared</button>
+</div>
+</section>
+<section class="mt-6 space-y-3">
+<div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-soft flex items-center gap-4">
+<div class="flex-shrink-0">
+<div class="size-6 border-2 border-primary/30 rounded-lg flex items-center justify-center bg-primary/[0.02]">
+</div>
+</div>
+<div class="flex-1">
+<h4 class="font-bold text-sm text-gray-900">Buy groceries for dinner</h4>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-[10px] text-gray-400 font-bold uppercase">Personal</span>
+<span class="size-1 rounded-full bg-gray-200"></span>
+<span class="text-[10px] text-primary font-bold uppercase">WhatsApp</span>
+</div>
+</div>
+<div class="flex -space-x-2">
+<div class="size-7 rounded-full border-2 border-white bg-gray-100 overflow-hidden ring-1 ring-gray-50">
+<div class="w-full h-full bg-cover bg-center" data-alt="Small user avatar" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBid_1lK1WV5td-OneoSq_6IymaWn_vQGk2jWeyhcbbVDZkkwoYB3GvukK2fxqo7tNkKkN9I1-2kSiDXx5E6hQU7jU8PkCpoP7-KwxR-oc6WTJ73ukB7WRXAwuoNN4LRr2QM71okK1DTEaAYXWXPM1lhz7iQXIrE2VP3_g93biW50CAltOVh0v_1NSFipV_mcmov8Q_K3li0OkdTgtjMVU4u24Rsvs_woyX4gxu2qy1mQImRxdD6MEbITsUV9z6R0km0sc3esLvtrw");'></div>
+</div>
+</div>
+</div>
+<div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-soft flex items-center gap-4">
+<div class="flex-shrink-0">
+<div class="size-6 border-2 border-gray-200 rounded-lg flex items-center justify-center"></div>
+</div>
+<div class="flex-1">
+<h4 class="font-bold text-sm text-gray-900">Update team on project status</h4>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-[10px] text-gray-400 font-bold uppercase">Shared</span>
+<span class="size-1 rounded-full bg-gray-200"></span>
+<span class="text-[10px] text-primary font-bold uppercase">Bot Sync</span>
+</div>
+</div>
+<div class="flex items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-xl">flag</span>
+</div>
+</div>
+<div class="bg-gray-50/50 p-4 rounded-2xl border border-gray-100/50 flex items-center gap-4">
+<div class="flex-shrink-0">
+<div class="size-6 bg-primary/20 rounded-lg flex items-center justify-center border border-primary/10">
+<span class="material-symbols-outlined text-primary text-base font-bold">check</span>
+</div>
+</div>
+<div class="flex-1">
+<h4 class="font-bold text-sm text-gray-300 line-through">Call Dentist</h4>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-[10px] text-gray-300 font-bold uppercase tracking-tight">Completed</span>
+</div>
+</div>
+</div>
+<div class="bg-white p-4 rounded-2xl border border-gray-100 shadow-soft flex items-center gap-4">
+<div class="flex-shrink-0">
+<div class="size-6 border-2 border-gray-200 rounded-lg flex items-center justify-center"></div>
+</div>
+<div class="flex-1">
+<h4 class="font-bold text-sm text-gray-900">Send invoice to Sarah</h4>
+<div class="flex items-center gap-2 mt-1">
+<span class="text-[10px] text-gray-400 font-bold uppercase">Reminders</span>
+<span class="size-1 rounded-full bg-gray-200"></span>
+<span class="text-[10px] text-primary font-bold uppercase">Voice Note</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-xl text-gray-300">attach_file</span>
+</div>
+</section>
+</main>
+<button class="fixed bottom-24 right-6 size-15 bg-primary text-white rounded-2xl shadow-xl shadow-primary/25 flex items-center justify-center z-40 p-4">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<nav class="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-white/95 backdrop-blur-xl border-t border-gray-100 h-20 px-6 flex items-center justify-between z-50">
+<a class="flex flex-col items-center gap-1.5 text-primary" href="#">
+<span class="material-symbols-outlined text-2xl fill-1">grid_view</span>
+<span class="text-[10px] font-bold uppercase tracking-wide">Home</span>
+</a>
+<a class="flex flex-col items-center gap-1.5 text-gray-400" href="#">
+<span class="material-symbols-outlined text-2xl">calendar_today</span>
+<span class="text-[10px] font-bold uppercase tracking-wide">Tasks</span>
+</a>
+<a class="flex flex-col items-center gap-1.5 text-gray-400" href="#">
+<span class="material-symbols-outlined text-2xl">forum</span>
+<span class="text-[10px] font-bold uppercase tracking-wide">Sync</span>
+</a>
+<a class="flex flex-col items-center gap-1.5 text-gray-400" href="#">
+<span class="material-symbols-outlined text-2xl">person</span>
+<span class="text-[10px] font-bold uppercase tracking-wide">Profile</span>
+</a>
+</nav>
+<div class="fixed bottom-2 left-1/2 -translate-x-1/2 w-36 h-1 bg-gray-200 rounded-full z-[60]"></div>
+</div>
+
+</body></html>

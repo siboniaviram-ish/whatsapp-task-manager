@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Task Hub - WhatsApp Task Manager</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "whatsapp": "#25D366",
+                        "whatsapp-dark": "#128C7E",
+                    },
+                    fontFamily: { "sans": ["Inter", "system-ui", "sans-serif"] },
+                },
+            },
+        }
+    </script>
+    <style>
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .gradient-bg { background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 50%, #f0fdf4 100%); }
+        .glass-card { background: rgba(255,255,255,0.7); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+        @keyframes float { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }
+        .float-anim { animation: float 3s ease-in-out infinite; }
+        @keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+        .pulse-ring::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; border: 2px solid #25D366; animation: pulse-ring 2s infinite; }
+    </style>
+</head>
+<body class="bg-white text-gray-900 min-h-screen">
+    <!-- Navbar -->
+    <nav class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-xl border-b border-gray-100">
+        <div class="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-primary text-2xl">task_alt</span>
+                <span class="text-xl font-bold tracking-tight">Task Hub</span>
+            </div>
+            <div class="hidden md:flex items-center gap-8">
+                <a href="#features" class="text-sm font-medium text-gray-600 hover:text-primary transition-colors">Features</a>
+                <a href="#how-it-works" class="text-sm font-medium text-gray-600 hover:text-primary transition-colors">How It Works</a>
+                <a href="#pricing" class="text-sm font-medium text-gray-600 hover:text-primary transition-colors">Pricing</a>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="/register" class="text-sm font-semibold text-primary hover:text-primary/80">Sign In</a>
+                <a href="/register" class="px-5 py-2.5 bg-primary text-white rounded-xl text-sm font-semibold hover:bg-primary/90 transition-colors shadow-md shadow-primary/20">
+                    Get Started
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="gradient-bg pt-32 pb-20 overflow-hidden">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="flex flex-col lg:flex-row items-center gap-16">
+                <div class="flex-1 text-center lg:text-right">
+                    <div class="inline-flex items-center gap-2 bg-whatsapp/10 text-whatsapp-dark px-4 py-2 rounded-full text-sm font-semibold mb-6">
+                        <span class="material-symbols-outlined text-lg">chat</span>
+                        Powered by WhatsApp
+                    </div>
+                    <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-tight mb-6">
+                        Manage Tasks<br/>
+                        <span class="text-primary">Directly from</span><br/>
+                        <span class="text-whatsapp">WhatsApp</span>
+                    </h1>
+                    <p class="text-lg text-gray-600 leading-relaxed mb-8 max-w-lg mx-auto lg:mx-0 lg:mr-0">
+                        Create tasks with voice messages, delegate to your team, schedule meetings - all through WhatsApp. Track everything on a beautiful dashboard.
+                    </p>
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
+                        <a href="/register" class="inline-flex items-center justify-center gap-2 px-8 py-4 bg-whatsapp text-white rounded-2xl text-base font-bold hover:bg-whatsapp-dark transition-all shadow-lg shadow-whatsapp/30">
+                            <span class="material-symbols-outlined">chat</span>
+                            Add to WhatsApp
+                        </a>
+                        <a href="/dashboard" class="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-gray-800 rounded-2xl text-base font-semibold border border-gray-200 hover:border-primary hover:text-primary transition-all shadow-soft">
+                            <span class="material-symbols-outlined">dashboard</span>
+                            View Dashboard
+                        </a>
+                    </div>
+                    <div class="flex items-center justify-center lg:justify-start gap-6 mt-8">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-accent-success text-xl">check_circle</span>
+                            <span class="text-sm text-gray-600">Voice Support</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-accent-success text-xl">check_circle</span>
+                            <span class="text-sm text-gray-600">Team Delegation</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-accent-success text-xl">check_circle</span>
+                            <span class="text-sm text-gray-600">Smart Reminders</span>
+                        </div>
+                    </div>
+                </div>
+                <!-- Phone Mockup -->
+                <div class="flex-1 flex justify-center">
+                    <div class="relative">
+                        <div class="w-[300px] h-[600px] bg-white rounded-[3rem] shadow-2xl border border-gray-200 overflow-hidden float-anim">
+                            <!-- Phone Screen -->
+                            <div class="h-full flex flex-col">
+                                <div class="bg-whatsapp-dark text-white px-6 py-4 pt-12">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                                            <span class="material-symbols-outlined text-xl">task_alt</span>
+                                        </div>
+                                        <div>
+                                            <p class="font-bold text-sm">Task Hub Bot</p>
+                                            <p class="text-xs text-white/70">Online</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex-1 bg-[#e5ddd5] p-4 space-y-3 overflow-hidden" dir="rtl">
+                                    <!-- Bot message -->
+                                    <div class="max-w-[85%]">
+                                        <div class="bg-white rounded-2xl rounded-tr-md p-3 shadow-sm">
+                                            <p class="text-sm">היי! אני Task Hub Bot 👋</p>
+                                            <p class="text-sm mt-1">מה תרצה לעשות?</p>
+                                            <p class="text-sm mt-2">1️⃣ משימה חדשה<br/>2️⃣ המשימות שלי<br/>3️⃣ קביעת פגישה</p>
+                                            <p class="text-[10px] text-gray-400 mt-1 text-left" dir="ltr">10:30 AM</p>
+                                        </div>
+                                    </div>
+                                    <!-- User message -->
+                                    <div class="max-w-[75%] mr-auto" dir="rtl">
+                                        <div class="bg-[#dcf8c6] rounded-2xl rounded-tl-md p-3 shadow-sm">
+                                            <p class="text-sm">1</p>
+                                            <p class="text-[10px] text-gray-500 mt-1 text-left" dir="ltr">10:31 AM ✓✓</p>
+                                        </div>
+                                    </div>
+                                    <!-- Bot response -->
+                                    <div class="max-w-[85%]">
+                                        <div class="bg-white rounded-2xl rounded-tr-md p-3 shadow-sm">
+                                            <p class="text-sm">מעולה! מה המשימה?</p>
+                                            <p class="text-sm">אפשר גם לשלוח הודעה קולית 🎤</p>
+                                            <p class="text-[10px] text-gray-400 mt-1 text-left" dir="ltr">10:31 AM</p>
+                                        </div>
+                                    </div>
+                                    <!-- Voice message -->
+                                    <div class="max-w-[75%] mr-auto">
+                                        <div class="bg-[#dcf8c6] rounded-2xl rounded-tl-md p-3 shadow-sm flex items-center gap-2">
+                                            <span class="material-symbols-outlined text-whatsapp-dark text-xl">mic</span>
+                                            <div class="flex-1 h-2 bg-whatsapp-dark/20 rounded-full overflow-hidden">
+                                                <div class="h-full bg-whatsapp-dark rounded-full w-[60%]"></div>
+                                            </div>
+                                            <span class="text-xs text-gray-500">0:08</span>
+                                        </div>
+                                    </div>
+                                    <!-- Bot confirms -->
+                                    <div class="max-w-[85%]">
+                                        <div class="bg-white rounded-2xl rounded-tr-md p-3 shadow-sm">
+                                            <p class="text-sm">✅ זיהיתי את המשימה:</p>
+                                            <p class="text-sm font-semibold mt-1">📋 להתקשר לרופא שיניים מחר</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="py-24 bg-white">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">Everything You Need</h2>
+                <p class="text-lg text-gray-500 max-w-2xl mx-auto">Powerful task management that lives where you already communicate</p>
+            </div>
+            <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <!-- Feature 1 -->
+                <div class="bg-gray-50 rounded-2xl p-8 hover:shadow-lg transition-shadow border border-gray-100">
+                    <div class="w-14 h-14 bg-primary/10 rounded-2xl flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-primary text-3xl">mic</span>
+                    </div>
+                    <h3 class="text-lg font-bold mb-3">Voice Task Creation</h3>
+                    <p class="text-sm text-gray-600 leading-relaxed">Send a voice message on WhatsApp and we'll automatically create a task with all the details extracted.</p>
+                </div>
+                <!-- Feature 2 -->
+                <div class="bg-gray-50 rounded-2xl p-8 hover:shadow-lg transition-shadow border border-gray-100">
+                    <div class="w-14 h-14 bg-whatsapp/10 rounded-2xl flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-whatsapp text-3xl">group</span>
+                    </div>
+                    <h3 class="text-lg font-bold mb-3">Task Delegation</h3>
+                    <p class="text-sm text-gray-600 leading-relaxed">Delegate tasks to team members via WhatsApp. Track progress and send follow-up reminders automatically.</p>
+                </div>
+                <!-- Feature 3 -->
+                <div class="bg-gray-50 rounded-2xl p-8 hover:shadow-lg transition-shadow border border-gray-100">
+                    <div class="w-14 h-14 bg-accent-warning/10 rounded-2xl flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-accent-warning text-3xl">notifications_active</span>
+                    </div>
+                    <h3 class="text-lg font-bold mb-3">Smart Reminders</h3>
+                    <p class="text-sm text-gray-600 leading-relaxed">Automated reminders sent directly to WhatsApp. Never miss a deadline with intelligent notification scheduling.</p>
+                </div>
+                <!-- Feature 4 -->
+                <div class="bg-gray-50 rounded-2xl p-8 hover:shadow-lg transition-shadow border border-gray-100">
+                    <div class="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-blue-500 text-3xl">calendar_month</span>
+                    </div>
+                    <h3 class="text-lg font-bold mb-3">Meeting Scheduling</h3>
+                    <p class="text-sm text-gray-600 leading-relaxed">Schedule meetings via WhatsApp. Send invites, get confirmations, and automatic reminders before each meeting.</p>
+                </div>
+                <!-- Feature 5 -->
+                <div class="bg-gray-50 rounded-2xl p-8 hover:shadow-lg transition-shadow border border-gray-100">
+                    <div class="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-purple-500 text-3xl">bar_chart</span>
+                    </div>
+                    <h3 class="text-lg font-bold mb-3">Analytics Dashboard</h3>
+                    <p class="text-sm text-gray-600 leading-relaxed">Beautiful web dashboard with productivity analytics, task progress charts, and team performance insights.</p>
+                </div>
+                <!-- Feature 6 -->
+                <div class="bg-gray-50 rounded-2xl p-8 hover:shadow-lg transition-shadow border border-gray-100">
+                    <div class="w-14 h-14 bg-green-50 rounded-2xl flex items-center justify-center mb-5">
+                        <span class="material-symbols-outlined text-green-500 text-3xl">sync</span>
+                    </div>
+                    <h3 class="text-lg font-bold mb-3">Real-time Sync</h3>
+                    <p class="text-sm text-gray-600 leading-relaxed">Tasks created on WhatsApp instantly appear on your dashboard. Changes sync both ways in real-time.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="how-it-works" class="py-24 bg-gray-50">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">How It Works</h2>
+                <p class="text-lg text-gray-500">Get started in 3 simple steps</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="text-center">
+                    <div class="w-20 h-20 bg-whatsapp/10 rounded-3xl flex items-center justify-center mx-auto mb-6 relative pulse-ring">
+                        <span class="material-symbols-outlined text-whatsapp text-4xl">contact_phone</span>
+                    </div>
+                    <div class="text-sm font-bold text-primary mb-2">Step 1</div>
+                    <h3 class="text-xl font-bold mb-3">Save Our Number</h3>
+                    <p class="text-sm text-gray-600">Add our WhatsApp number to your contacts or register through our web app</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                        <span class="material-symbols-outlined text-primary text-4xl">waving_hand</span>
+                    </div>
+                    <div class="text-sm font-bold text-primary mb-2">Step 2</div>
+                    <h3 class="text-xl font-bold mb-3">Say "היי"</h3>
+                    <p class="text-sm text-gray-600">Send a greeting message to activate the bot and start your personalized experience</p>
+                </div>
+                <div class="text-center">
+                    <div class="w-20 h-20 bg-accent-success/10 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                        <span class="material-symbols-outlined text-accent-success text-4xl">rocket_launch</span>
+                    </div>
+                    <div class="text-sm font-bold text-primary mb-2">Step 3</div>
+                    <h3 class="text-xl font-bold mb-3">Create Tasks</h3>
+                    <p class="text-sm text-gray-600">Start creating tasks naturally - type, voice, delegate, or schedule meetings</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing Section -->
+    <section id="pricing" class="py-24 bg-white">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="text-center mb-16">
+                <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4">Simple Pricing</h2>
+                <p class="text-lg text-gray-500">Start free, upgrade when you need more</p>
+            </div>
+            <div class="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+                <!-- Free -->
+                <div class="bg-white rounded-2xl p-8 border border-gray-200 hover:shadow-lg transition-shadow">
+                    <h3 class="text-lg font-bold mb-2">Free</h3>
+                    <div class="flex items-baseline gap-1 mb-6">
+                        <span class="text-4xl font-extrabold">$0</span>
+                        <span class="text-gray-500 text-sm">/month</span>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> Up to 20 tasks/month</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> Voice task creation</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> Basic reminders</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> Web dashboard</li>
+                    </ul>
+                    <a href="/register" class="block w-full py-3 text-center rounded-xl border border-gray-200 text-sm font-semibold hover:border-primary hover:text-primary transition-colors">
+                        Get Started
+                    </a>
+                </div>
+                <!-- Pro -->
+                <div class="bg-primary rounded-2xl p-8 text-white relative shadow-xl shadow-primary/20 scale-105">
+                    <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-accent-warning text-white text-xs font-bold px-3 py-1 rounded-full">POPULAR</div>
+                    <h3 class="text-lg font-bold mb-2">Pro</h3>
+                    <div class="flex items-baseline gap-1 mb-6">
+                        <span class="text-4xl font-extrabold">$9</span>
+                        <span class="text-white/70 text-sm">/month</span>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-lg">check</span> Unlimited tasks</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-lg">check</span> Task delegation</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-lg">check</span> Meeting scheduling</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-lg">check</span> Advanced analytics</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-lg">check</span> Priority support</li>
+                    </ul>
+                    <a href="/register" class="block w-full py-3 text-center rounded-xl bg-white text-primary text-sm font-bold hover:bg-gray-100 transition-colors">
+                        Start Pro Trial
+                    </a>
+                </div>
+                <!-- Enterprise -->
+                <div class="bg-white rounded-2xl p-8 border border-gray-200 hover:shadow-lg transition-shadow">
+                    <h3 class="text-lg font-bold mb-2">Enterprise</h3>
+                    <div class="flex items-baseline gap-1 mb-6">
+                        <span class="text-4xl font-extrabold">$29</span>
+                        <span class="text-gray-500 text-sm">/month</span>
+                    </div>
+                    <ul class="space-y-3 mb-8">
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> Everything in Pro</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> Team management</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> Admin dashboard</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> API access</li>
+                        <li class="flex items-center gap-2 text-sm"><span class="material-symbols-outlined text-accent-success text-lg">check</span> Custom integrations</li>
+                    </ul>
+                    <a href="/register" class="block w-full py-3 text-center rounded-xl border border-gray-200 text-sm font-semibold hover:border-primary hover:text-primary transition-colors">
+                        Contact Sales
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="py-24 bg-gradient-to-r from-primary to-blue-600">
+        <div class="max-w-4xl mx-auto px-6 text-center text-white">
+            <h2 class="text-3xl md:text-4xl font-bold mb-6">Ready to Boost Your Productivity?</h2>
+            <p class="text-lg text-white/80 mb-8 max-w-2xl mx-auto">Join thousands of users managing their tasks through WhatsApp. Start for free today.</p>
+            <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                <a href="/register" class="inline-flex items-center justify-center gap-2 px-8 py-4 bg-white text-primary rounded-2xl text-base font-bold hover:bg-gray-100 transition-colors shadow-lg">
+                    <span class="material-symbols-outlined">person_add</span>
+                    Create Free Account
+                </a>
+                <a href="/register" class="inline-flex items-center justify-center gap-2 px-8 py-4 bg-whatsapp text-white rounded-2xl text-base font-bold hover:bg-whatsapp-dark transition-colors shadow-lg">
+                    <span class="material-symbols-outlined">chat</span>
+                    Open WhatsApp
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-400 py-12">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+                <div class="flex items-center gap-2">
+                    <span class="material-symbols-outlined text-primary text-2xl">task_alt</span>
+                    <span class="text-xl font-bold text-white">Task Hub</span>
+                </div>
+                <div class="flex gap-6 text-sm">
+                    <a href="#" class="hover:text-white transition-colors">Privacy Policy</a>
+                    <a href="#" class="hover:text-white transition-colors">Terms of Service</a>
+                    <a href="#" class="hover:text-white transition-colors">Contact</a>
+                </div>
+                <p class="text-sm">&copy; 2024 Task Hub. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

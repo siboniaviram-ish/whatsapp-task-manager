@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Unified Task Management White Edition</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .ios-shadow {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-white dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen">
+<!-- Sticky Top Navigation -->
+<header class="sticky top-0 z-50 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-100 dark:border-slate-800">
+<div class="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-primary text-2xl">task_alt</span>
+<h1 class="text-lg font-bold tracking-tight">Unified Tasks</h1>
+</div>
+<div class="flex items-center gap-3">
+<button class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+<span class="material-symbols-outlined text-slate-600 dark:text-slate-400">search</span>
+</button>
+<div class="w-8 h-8 rounded-full overflow-hidden border border-slate-200">
+<img alt="User profile" class="w-full h-full object-cover" data-alt="Professional male portrait avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDwsBt5l-D19eSD8OB50oWSJvsVb6o_BCJUxQY9qJ3e8Q_N_8pZFzFe1wBzywlfkLBzfPS_IXLRraKiT6-ON3tJxw-eT-xYCiruypdKOjakeYvyq5yyG8b7sk_VmxYpYznNClwoxECfqN4cVpvu_YNda6W8GuRlCg99f9nmqqffEq7MqFuRjH4D7yI5U63pLQiQ4kt9pxVwAyG3cQb_RBToJ9ch8utTVvdwZTLYH7L28s4xecLHS8YuzaVIsVUh-Z6yuobSBS1GiQk"/>
+</div>
+</div>
+</div>
+<!-- Segmented Control -->
+<div class="max-w-md mx-auto px-4 pb-4">
+<div class="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+<button class="flex-1 py-1.5 text-sm font-semibold rounded-lg bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white transition-all">
+                    Personal
+                </button>
+<button class="flex-1 py-1.5 text-sm font-medium text-slate-500 dark:text-slate-400 rounded-lg transition-all">
+                    Delegated
+                </button>
+</div>
+</div>
+</header>
+<main class="max-w-md mx-auto px-4 py-6 space-y-8 pb-24">
+<!-- Section: Personal Responsibilities -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h2 class="text-sm font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Personal Responsibilities</h2>
+<span class="text-xs font-medium px-2 py-0.5 bg-primary/10 text-primary rounded-full">3 Active</span>
+</div>
+<div class="space-y-3">
+<!-- Task Card 1 (Transcription) -->
+<div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 ios-shadow group">
+<div class="flex items-start gap-3">
+<div class="pt-0.5">
+<input class="w-5 h-5 rounded-full border-slate-300 dark:border-slate-700 text-primary focus:ring-primary focus:ring-offset-0" type="checkbox"/>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="font-semibold text-slate-900 dark:text-white">Review Q3 Budget Proposal</h3>
+<span class="material-symbols-outlined text-primary text-sm" title="Transcribed from Voice">mic_none</span>
+</div>
+<p class="text-sm text-slate-500 dark:text-slate-400 line-clamp-1 mb-2">Transcribed from WhatsApp voice note</p>
+<div class="flex items-center gap-3">
+<span class="text-[11px] font-bold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400">HIGH PRIORITY</span>
+<span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">calendar_today</span> Today
+                                </span>
+</div>
+</div>
+</div>
+</div>
+<!-- Task Card 2 -->
+<div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 ios-shadow">
+<div class="flex items-start gap-3">
+<div class="pt-0.5">
+<input class="w-5 h-5 rounded-full border-slate-300 dark:border-slate-700 text-primary focus:ring-primary focus:ring-offset-0" type="checkbox"/>
+</div>
+<div class="flex-1">
+<h3 class="font-semibold text-slate-900 dark:text-white mb-1">Update website hero section</h3>
+<div class="flex items-center gap-3">
+<span class="text-[11px] font-medium text-slate-400 dark:text-slate-500 flex items-center gap-1">
+<span class="material-symbols-outlined text-xs">calendar_today</span> Tomorrow
+                                </span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Section: Delegated to Others -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h2 class="text-sm font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Delegated to Others</h2>
+</div>
+<div class="space-y-3">
+<!-- Delegated Task 1 -->
+<div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 ios-shadow">
+<div class="flex items-start justify-between mb-3">
+<div class="flex-1">
+<h3 class="font-semibold text-slate-900 dark:text-white mb-1">Finalize UI Mockups</h3>
+<p class="text-xs text-slate-500 dark:text-slate-400">Assigned to Sarah M.</p>
+</div>
+<img alt="Recipient Avatar" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 object-cover" data-alt="Young professional woman avatar portrait" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDjLsNp1wydR298fj-yxOFLK3D44FzDYf2bxZASCOmv4ZkNsvumF_Tm_0LGzpe36kw0_4Pws8JlpI89Sb6jcfDV-ESwBzGjC4fZYjRzaXWHRVwGB663EFZw1HQzAk_uE5IK0wQzBCJEiSEXLd5zC8ieukZ1KAQ9PShMhJk9rDRMlaHWK4-ZEgFJVFZP3TC_LMgNPvweWcMBafCV3-qPQzieIT0GvIcHvUeAOaVTXZVP-Usr6TBEMAhkNoPilJb31Vtaecmvchf7tVI"/>
+</div>
+<div class="flex items-center justify-between mt-4 pt-3 border-t border-slate-50 dark:border-slate-800">
+<div class="flex items-center gap-2">
+<div class="flex -space-x-1">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+</div>
+<span class="text-[11px] font-medium text-slate-400">In Progress</span>
+</div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-bold rounded-lg border border-green-100 dark:border-green-800/30 transition-colors hover:bg-green-100">
+<span class="material-symbols-outlined text-sm">chat</span>
+                            WhatsApp Follow-up
+                        </button>
+</div>
+</div>
+<!-- Delegated Task 2 -->
+<div class="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl p-4 ios-shadow opacity-75">
+<div class="flex items-start justify-between mb-3">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="font-semibold text-slate-900 dark:text-white">API Documentation Review</h3>
+<span class="material-symbols-outlined text-primary text-sm" title="Transcribed from Voice">mic_none</span>
+</div>
+<p class="text-xs text-slate-500 dark:text-slate-400">Assigned to Alex Rivera</p>
+</div>
+<img alt="Recipient Avatar" class="w-8 h-8 rounded-full border-2 border-white dark:border-slate-800 object-cover" data-alt="Male professional avatar portrait with glasses" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDOMfEoxpG_QMPlGUiVi-zSXsvMEF7pfcL5GUzZWZXaDvjY9O_2hPV2wA6MvdHnaOuu9jEPysx7dI17ZXTiv1JmlXe9vZ6HysRQhp1qSDE-4o_pDpMu1Ui9_vTkF4NASwfq-L3h-bok4yerap-vPXQjKguSnGpyUmQpdxISasn-eZ7UAJ2Ie24XTXKVEBgoJcYB8GLQO5_QvLwMo8s2vKgJI0QRRaOH03hTbHGjWEF9TV8vyxXr7DRdIaVe-rInnHv0WnMboDAKHA4"/>
+</div>
+<div class="flex items-center justify-between mt-4 pt-3 border-t border-slate-50 dark:border-slate-800">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-slate-300 dark:text-slate-600 text-sm">schedule</span>
+<span class="text-[11px] font-medium text-slate-400 uppercase">Wait for reply</span>
+</div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 text-xs font-bold rounded-lg border border-green-100 dark:border-green-800/30 transition-colors">
+<span class="material-symbols-outlined text-sm">chat</span>
+                            WhatsApp Follow-up
+                        </button>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed right-6 bottom-24 w-14 h-14 bg-primary text-white rounded-full flex items-center justify-center shadow-lg shadow-primary/30 z-50 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<!-- Navigation Bar -->
+<nav class="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-background-dark/90 backdrop-blur-lg border-t border-slate-100 dark:border-slate-800 px-6 py-3 flex justify-between items-center z-50">
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined">format_list_bulleted</span>
+<span class="text-[10px] font-bold">Tasks</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500">
+<span class="material-symbols-outlined">forum</span>
+<span class="text-[10px] font-bold">Messages</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500">
+<span class="material-symbols-outlined">trending_up</span>
+<span class="text-[10px] font-bold">Insights</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-[10px] font-bold">Settings</span>
+</button>
+</nav>
+</body></html>

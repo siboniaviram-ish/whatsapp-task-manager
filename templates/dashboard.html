@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Task Hub{% endblock %}
+{% block body %}
+<div class="relative flex h-auto min-h-screen w-full flex-col overflow-x-hidden max-w-[430px] mx-auto bg-white shadow-2xl">
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-white/90 backdrop-blur-md px-4 py-4 border-b border-gray-50">
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-3">
+                <div class="size-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border border-primary/20">
+                    <span class="material-symbols-outlined text-primary text-xl">person</span>
+                </div>
+                <div>
+                    <p class="text-[11px] text-gray-500 font-medium uppercase tracking-wider">Welcome back,</p>
+                    <h1 class="text-lg font-bold text-gray-900 leading-tight" id="user-name">Loading...</h1>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button class="size-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 border border-gray-100 relative" id="btn-notifications">
+                    <span class="material-symbols-outlined text-xl">notifications</span>
+                    <span class="absolute -top-1 -right-1 size-4 bg-accent-danger text-white text-[9px] font-bold rounded-full flex items-center justify-center" id="notif-badge">3</span>
+                </button>
+                <button class="size-10 flex items-center justify-center rounded-full bg-gray-50 text-gray-600 border border-gray-100">
+                    <span class="material-symbols-outlined text-xl">search</span>
+                </button>
+            </div>
+        </div>
+        <!-- Sync Status -->
+        <div class="bg-primary/[0.03] rounded-2xl p-4 border border-primary/10 shadow-soft">
+            <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2">
+                    <span class="relative flex h-2.5 w-2.5">
+                        <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                        <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-primary"></span>
+                    </span>
+                    <p class="text-sm font-bold text-primary tracking-tight">Voice Sync Active</p>
+                </div>
+                <span class="text-[10px] font-bold text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">LIVE</span>
+            </div>
+            <div class="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-3">
+                <div class="bg-primary h-full w-[85%] rounded-full shadow-[0_0_8px_rgba(19,127,236,0.3)]"></div>
+            </div>
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px] text-primary/70">sync</span>
+                    <p class="text-xs text-gray-500 font-medium">Synced with WhatsApp 2m ago</p>
+                </div>
+                <span class="material-symbols-outlined text-gray-300 text-lg cursor-pointer">more_horiz</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 px-4 pb-28">
+        <!-- Today's Focus Section -->
+        <section class="mt-8">
+            <div class="flex items-center justify-between mb-5">
+                <h2 class="text-xl font-bold tracking-tight text-gray-900">Today's Focus</h2>
+                <a href="/tasks?user_id={{ user_id }}" class="text-primary text-sm font-bold bg-primary/5 px-3 py-1 rounded-full">View All</a>
+            </div>
+            <div class="flex gap-4 overflow-x-auto hide-scrollbar -mx-4 px-4 pb-4" id="today-focus-cards">
+                <!-- Cards loaded via JS -->
+            </div>
+        </section>
+
+        <!-- Categories -->
+        <section class="mt-8">
+            <h2 class="text-[15px] font-bold mb-4 text-gray-400 uppercase tracking-widest px-1">Categories</h2>
+            <div class="flex gap-2.5 overflow-x-auto hide-scrollbar pb-2" id="category-filters">
+                <button class="category-btn active px-6 py-2.5 bg-primary text-white rounded-full text-sm font-bold whitespace-nowrap shadow-sm" data-category="all">All Tasks</button>
+                <button class="category-btn px-6 py-2.5 bg-white border border-gray-100 text-gray-600 rounded-full text-sm font-semibold whitespace-nowrap shadow-sm" data-category="personal">Personal</button>
+                <button class="category-btn px-6 py-2.5 bg-white border border-gray-100 text-gray-600 rounded-full text-sm font-semibold whitespace-nowrap shadow-sm" data-category="work">Work</button>
+                <button class="category-btn px-6 py-2.5 bg-white border border-gray-100 text-gray-600 rounded-full text-sm font-semibold whitespace-nowrap shadow-sm" data-category="reminders">Reminders</button>
+            </div>
+        </section>
+
+        <!-- Task List -->
+        <section class="mt-6 space-y-3" id="task-list">
+            <!-- Tasks loaded via JS -->
+        </section>
+    </main>
+
+    <!-- FAB -->
+    <button class="fixed bottom-24 right-6 size-15 bg-primary text-white rounded-2xl shadow-xl shadow-primary/25 flex items-center justify-center z-40 p-4" id="btn-add-task" onclick="openAddTaskModal()">
+        <span class="material-symbols-outlined text-3xl">add</span>
+    </button>
+
+    <!-- Bottom Nav -->
+    <nav class="fixed bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-white/95 backdrop-blur-xl border-t border-gray-100 h-20 px-6 flex items-center justify-between z-50">
+        <a class="flex flex-col items-center gap-1.5 text-primary" href="/dashboard?user_id={{ user_id }}">
+            <span class="material-symbols-outlined text-2xl" style="font-variation-settings: 'FILL' 1">grid_view</span>
+            <span class="text-[10px] font-bold uppercase tracking-wide">Home</span>
+        </a>
+        <a class="flex flex-col items-center gap-1.5 text-gray-400" href="/tasks?user_id={{ user_id }}">
+            <span class="material-symbols-outlined text-2xl">checklist</span>
+            <span class="text-[10px] font-bold uppercase tracking-wide">Tasks</span>
+        </a>
+        <a class="flex flex-col items-center gap-1.5 text-gray-400" href="/calendar?user_id={{ user_id }}">
+            <span class="material-symbols-outlined text-2xl">calendar_today</span>
+            <span class="text-[10px] font-bold uppercase tracking-wide">Calendar</span>
+        </a>
+        <a class="flex flex-col items-center gap-1.5 text-gray-400" href="/analytics?user_id={{ user_id }}">
+            <span class="material-symbols-outlined text-2xl">bar_chart</span>
+            <span class="text-[10px] font-bold uppercase tracking-wide">Analytics</span>
+        </a>
+    </nav>
+</div>
+
+<!-- Add Task Modal -->
+<div id="add-task-modal" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeAddTaskModal()"></div>
+    <div class="absolute bottom-0 left-0 right-0 max-w-[430px] mx-auto bg-white rounded-t-3xl p-6 pb-10 transform transition-transform">
+        <div class="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6"></div>
+        <h3 class="text-lg font-bold mb-6">New Task</h3>
+        <form id="add-task-form" onsubmit="submitTask(event)">
+            <div class="space-y-4">
+                <input type="text" name="title" placeholder="Task title..." required
+                    class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm"/>
+                <textarea name="description" placeholder="Description (optional)" rows="2"
+                    class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-sm resize-none"></textarea>
+                <div class="grid grid-cols-2 gap-3">
+                    <select name="priority" class="px-4 py-3 rounded-xl border border-gray-200 text-sm">
+                        <option value="low">Low Priority</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="high">High Priority</option>
+                        <option value="urgent">Urgent</option>
+                    </select>
+                    <select name="category" class="px-4 py-3 rounded-xl border border-gray-200 text-sm">
+                        <option value="general">General</option>
+                        <option value="personal">Personal</option>
+                        <option value="work">Work</option>
+                        <option value="health">Health</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <input type="date" name="due_date" class="px-4 py-3 rounded-xl border border-gray-200 text-sm"/>
+                    <input type="time" name="due_time" class="px-4 py-3 rounded-xl border border-gray-200 text-sm"/>
+                </div>
+                <select name="task_type" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm">
+                    <option value="today">Today Task</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="recurring">Recurring</option>
+                    <option value="someday">Someday</option>
+                </select>
+                <button type="submit" class="w-full py-3.5 bg-primary text-white rounded-xl font-semibold text-sm hover:bg-primary/90 transition-colors shadow-md shadow-primary/20">
+                    Create Task
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/app.js"></script>
+<script>
+const USER_ID = {{ user_id }};
+document.addEventListener('DOMContentLoaded', function() { initDashboard(USER_ID); });
+</script>
+{% endblock %}

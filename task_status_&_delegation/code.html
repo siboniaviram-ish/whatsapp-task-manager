@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Task Status &amp; Delegation</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#101922",
+                    },
+                    fontFamily: {
+                        "display": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>.material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24
+    }
+.task-checkbox:checked {
+    background-image: url(https://lh3.googleusercontent.com/aida-public/AB6AXuAwijTt94OByY0wEDdt23FecrPO2mDrr_NQUV5XPy1Xll_G5NY34o6vxBSGUyE5roGE6_FCBRUoitPxrxHrbhj5zUblPx5ieId_PlqeCN7kICPU4fw3xnPY-pzTQnQzB2XBsuSHNF-QYOyVPcJGlj_16IDD9roUhieS0Uio_YPg77n8JYSB_HOTVnOFMDQEuTOWIPjnzNyOyjbp2Hv8yJ7RRtgaSkIlGuHoQFeG6IELpDk7WbrC-rxhaPqtHNDQRPsLAgggnfApkpY)
+    }</style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 min-h-screen">
+<!-- Top Navigation Bar -->
+<header class="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md px-4 pt-6 pb-2 border-b border-slate-200 dark:border-slate-800">
+<div class="flex items-center justify-between mb-4">
+<button class="w-10 h-10 flex items-center justify-start">
+<span class="material-symbols-outlined text-2xl">menu</span>
+</button>
+<h1 class="text-lg font-bold tracking-tight">Task Management</h1>
+<div class="flex gap-2">
+<button class="w-10 h-10 flex items-center justify-center">
+<span class="material-symbols-outlined text-2xl text-primary">add_circle</span>
+</button>
+<button class="w-10 h-10 flex items-center justify-end">
+<span class="material-symbols-outlined text-2xl">search</span>
+</button>
+</div>
+</div>
+<!-- Segmented Control (iOS Style) -->
+<div class="flex p-1 bg-slate-200 dark:bg-slate-800 rounded-xl mb-2">
+<button class="flex-1 py-1.5 text-sm font-semibold rounded-lg bg-white dark:bg-slate-700 shadow-sm text-slate-900 dark:text-white">
+                My Tasks
+            </button>
+<button class="flex-1 py-1.5 text-sm font-medium text-slate-500 dark:text-slate-400">
+                Team Feed
+            </button>
+</div>
+</header>
+<main class="p-4 space-y-6">
+<!-- Overdue Section -->
+<section>
+<div class="flex items-center justify-between mb-3 px-1">
+<h2 class="text-xl font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+<span class="material-symbols-outlined text-xl">error</span>
+                    Overdue
+                </h2>
+<span class="text-xs font-bold px-2 py-0.5 bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded-full">3 TASKS</span>
+</div>
+<div class="space-y-3">
+<!-- Overdue Task 1 -->
+<div class="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border-l-4 border-red-500 relative overflow-hidden">
+<div class="flex items-start gap-4">
+<div class="mt-0.5">
+<input class="task-checkbox h-6 w-6 rounded-full border-2 border-slate-300 dark:border-slate-600 text-primary focus:ring-primary focus:ring-offset-0 bg-transparent cursor-pointer transition-all" type="checkbox"/>
+</div>
+<div class="flex-1">
+<h3 class="font-semibold text-slate-800 dark:text-slate-100 leading-snug">Submit Q3 Financial Report</h3>
+<p class="text-sm text-red-500 font-medium mt-1">Due Yesterday • High Priority</p>
+<div class="flex items-center gap-2 mt-4">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined text-base">forward_to_inbox</span>
+                                    DELEGATE
+                                </button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold">
+<span class="material-symbols-outlined text-base">edit</span>
+                                    EDIT
+                                </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Overdue Task 2 -->
+<div class="bg-white dark:bg-slate-900 rounded-xl p-4 shadow-sm border-l-4 border-red-500">
+<div class="flex items-start gap-4">
+<div class="mt-0.5">
+<input class="task-checkbox h-6 w-6 rounded-full border-2 border-slate-300 dark:border-slate-600 text-primary focus:ring-primary focus:ring-offset-0 bg-transparent cursor-pointer transition-all" type="checkbox"/>
+</div>
+<div class="flex-1">
+<h3 class="font-semibold text-slate-800 dark:text-slate-100 leading-snug">Client Review: Project Phoenix</h3>
+<p class="text-sm text-red-500 font-medium mt-1">Due 2 days ago</p>
+<div class="flex items-center gap-2 mt-4">
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-bold hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined text-base">forward_to_inbox</span>
+                                    DELEGATE
+                                </button>
+<button class="p-1.5 text-slate-400">
+<span class="material-symbols-outlined">more_horiz</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Pending Others Section -->
+<section>
+<div class="flex items-center justify-between mb-3 px-1">
+<h2 class="text-lg font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+<span class="material-symbols-outlined text-xl">hourglass_empty</span>
+                    Pending Others
+                </h2>
+<span class="text-xs font-medium text-slate-500">WHATSAPP SYNCED</span>
+</div>
+<div class="space-y-3">
+<!-- Delegated Task 1 -->
+<div class="bg-white/60 dark:bg-slate-900/60 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+<div class="flex items-start justify-between">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-green-500 text-base">chat</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-slate-500">Delegated via Bot</span>
+</div>
+<h3 class="font-medium text-slate-700 dark:text-slate-300">Finalize Marketing Assets</h3>
+<div class="flex items-center gap-2 mt-2">
+<div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="Profile photo of a professional male" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBiuFUTAJBqceKajWENC4OJfT0SamddyhStjn-QENd-runhKWep_1154FfskWbrgH07s35LEDNQ-DWTclwXEo6Xlf7-2LWv5LNNCjgIFJAqx6guaxJcW_sluvce6TPa1zVpeCQjig92jtgaHmYkkLZMMycttR8NQU8Wi6te27jFfd6By7QYWjQipRGk_YiU8C0g2o58vgALQ0ocpBiOnzBaae0oW48RLlBxtg28dPlhB8_47-ADgUKZRvVkps9Nu1PUaUh5E7EFZ6I"/>
+</div>
+<p class="text-xs text-slate-500 font-medium">To: <span class="text-slate-900 dark:text-slate-100">Marcus Wright</span></p>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] font-bold px-1.5 py-0.5 bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-500 rounded">WAITING</span>
+<span class="text-[10px] text-slate-400">Sent 2h ago</span>
+</div>
+</div>
+<div class="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center">
+<button class="text-xs font-bold text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">notifications</span>
+                            NUDGE ON WHATSAPP
+                        </button>
+<button class="text-xs font-bold text-slate-400">RECALL</button>
+</div>
+</div>
+<!-- Delegated Task 2 -->
+<div class="bg-white/60 dark:bg-slate-900/60 rounded-xl p-4 border border-slate-200 dark:border-slate-800">
+<div class="flex items-start justify-between">
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-1">
+<span class="material-symbols-outlined text-green-500 text-base">chat</span>
+<span class="text-[10px] font-bold tracking-widest uppercase text-slate-500">Delegated via Bot</span>
+</div>
+<h3 class="font-medium text-slate-700 dark:text-slate-300">Update API Documentation</h3>
+<div class="flex items-center gap-2 mt-2">
+<div class="w-6 h-6 rounded-full bg-primary/20 flex items-center justify-center overflow-hidden text-[10px] text-primary font-bold">
+                                    SL
+                                </div>
+<p class="text-xs text-slate-500 font-medium">To: <span class="text-slate-900 dark:text-slate-100">Sarah Lee</span></p>
+</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="text-[10px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded">VIEWED</span>
+<span class="text-[10px] text-slate-400">Yesterday</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- Floating Action Button -->
+<div class="fixed bottom-24 right-6">
+<button class="w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+</div>
+<!-- Bottom Navigation Bar (iOS Style) -->
+<nav class="fixed bottom-0 w-full bg-white/80 dark:bg-slate-950/80 backdrop-blur-lg border-t border-slate-200 dark:border-slate-800 pb-8 pt-2 px-6 flex justify-between items-center z-50">
+<div class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-2xl">task_alt</span>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Tasks</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined text-2xl">hub</span>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Delegation</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined text-2xl">chat_bubble</span>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Bot</span>
+</div>
+<div class="flex flex-col items-center gap-1 text-slate-400">
+<span class="material-symbols-outlined text-2xl">settings</span>
+<span class="text-[10px] font-bold uppercase tracking-tighter">Settings</span>
+</div>
+</nav>
+<!-- Status Bar Spacer (for mobile feel) -->
+<div class="h-20"></div>
+</body></html>

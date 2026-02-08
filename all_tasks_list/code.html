@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>All Tasks List - White Edition</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#000000",
+                        "accent": "#25D366", // WhatsApp Green for subtle accents
+                        "background": "#FFFFFF",
+                        "surface": "#F9F9F9",
+                        "border-light": "#EEEEEE",
+                    },
+                    fontFamily: {
+                        "sans": ["Inter", "sans-serif"]
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer base {
+            body {
+                @apply bg-white text-gray-900 antialiased;
+                -webkit-tap-highlight-color: transparent;
+            }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .ios-blur {
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .task-card {
+            transition: all 0.2s ease;
+        }
+        .task-card:active {
+            transform: scale(0.98);
+            background-color: #f5f5f5;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-sans">
+<div class="relative flex h-screen w-full flex-col overflow-hidden max-w-md mx-auto bg-white">
+<header class="flex flex-col gap-4 bg-white/90 ios-blur sticky top-0 z-30 px-6 pt-12 pb-4">
+<div class="flex items-center justify-between">
+<span class="material-symbols-outlined text-gray-400">menu</span>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-gray-400">search</span>
+<div class="w-8 h-8 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-[10px] font-bold">JD</div>
+</div>
+</div>
+<h1 class="text-3xl font-bold tracking-tight text-black">All Tasks</h1>
+</header>
+<div class="flex gap-2 px-6 py-2 overflow-x-auto custom-scrollbar shrink-0">
+<button class="px-5 py-2 rounded-full bg-black text-white text-xs font-semibold">
+            All
+        </button>
+<button class="px-5 py-2 rounded-full bg-white border border-border-light text-gray-500 text-xs font-medium flex items-center gap-1">
+            Pending
+            <span class="material-symbols-outlined text-sm">expand_more</span>
+</button>
+<button class="px-5 py-2 rounded-full bg-white border border-border-light text-gray-500 text-xs font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-sm text-accent">chat</span>
+            WhatsApp
+        </button>
+</div>
+<main class="flex-1 overflow-y-auto px-6 py-4 space-y-10 pb-32 custom-scrollbar">
+<div class="task-card flex flex-col gap-4 group">
+<div class="flex justify-between items-start">
+<div class="flex gap-4 flex-1">
+<div class="flex items-center justify-center rounded-2xl bg-gray-50 border border-gray-100 text-black shrink-0 size-12 shadow-sm">
+<span class="material-symbols-outlined text-xl">mic</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="text-base font-semibold text-black leading-tight">Q4 Strategy Sync</h3>
+<p class="text-gray-400 text-sm italic font-light leading-relaxed">"Prioritize mobile redesign and finalize API docs by Friday..."</p>
+</div>
+</div>
+<div class="ml-4">
+<input class="h-6 w-6 rounded-full border-gray-200 text-black focus:ring-0 focus:ring-offset-0 transition-all cursor-pointer" type="checkbox"/>
+</div>
+</div>
+<div class="flex items-center gap-4 ml-16">
+<div class="flex items-center gap-1 text-[10px] font-bold text-accent tracking-widest uppercase">
+<span class="material-symbols-outlined text-xs">chat</span> WhatsApp
+                </div>
+<div class="flex items-center gap-1 text-[10px] font-medium text-gray-400 uppercase tracking-widest">
+<span class="material-symbols-outlined text-xs">schedule</span> Due Today
+                </div>
+</div>
+</div>
+<div class="task-card flex flex-col gap-4">
+<div class="flex justify-between items-start">
+<div class="flex gap-4 flex-1">
+<div class="flex items-center justify-center rounded-2xl bg-gray-50 border border-gray-100 text-black shrink-0 size-12 shadow-sm">
+<span class="material-symbols-outlined text-xl">notes</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="text-base font-semibold text-black leading-tight">Review marketing proposal</h3>
+<p class="text-gray-400 text-sm font-light">Assigned via dashboard</p>
+</div>
+</div>
+<div class="ml-4">
+<input class="h-6 w-6 rounded-full border-gray-200 text-black focus:ring-0 focus:ring-offset-0 transition-all cursor-pointer" type="checkbox"/>
+</div>
+</div>
+<div class="flex items-center gap-4 ml-16">
+<div class="flex items-center gap-1 text-[10px] font-bold text-gray-300 tracking-widest uppercase">
+<span class="material-symbols-outlined text-xs">chat</span> Dashboard
+                </div>
+<div class="flex items-center gap-1 text-[10px] font-medium text-gray-400 uppercase tracking-widest">
+<span class="material-symbols-outlined text-xs">calendar_today</span> Oct 25
+                </div>
+</div>
+</div>
+<div class="task-card flex flex-col gap-4">
+<div class="flex justify-between items-start">
+<div class="flex gap-4 flex-1">
+<div class="flex items-center justify-center rounded-2xl bg-gray-50 border border-gray-100 text-black shrink-0 size-12 shadow-sm">
+<span class="material-symbols-outlined text-xl">mic</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="text-base font-semibold text-black leading-tight">Landing Page Feedback</h3>
+<p class="text-gray-400 text-sm italic font-light leading-relaxed">"Hero section needs more contrast, CTA bigger..."</p>
+</div>
+</div>
+<div class="ml-4">
+<input class="h-6 w-6 rounded-full border-gray-200 text-black focus:ring-0 focus:ring-offset-0 transition-all cursor-pointer" type="checkbox"/>
+</div>
+</div>
+<div class="flex items-center gap-4 ml-16">
+<div class="flex items-center gap-1 text-[10px] font-bold text-accent tracking-widest uppercase">
+<span class="material-symbols-outlined text-xs">chat</span> WhatsApp
+                </div>
+<div class="flex items-center gap-1 text-[10px] font-medium text-gray-400 uppercase tracking-widest">
+<span class="material-symbols-outlined text-xs">calendar_today</span> Tomorrow
+                </div>
+</div>
+</div>
+<div class="task-card flex flex-col gap-4 opacity-30">
+<div class="flex justify-between items-start">
+<div class="flex gap-4 flex-1">
+<div class="flex items-center justify-center rounded-2xl bg-gray-50 text-gray-400 shrink-0 size-12">
+<span class="material-symbols-outlined text-xl">check_circle</span>
+</div>
+<div class="flex flex-col gap-1">
+<h3 class="text-base font-medium text-gray-500 leading-tight line-through">Send client invoice</h3>
+</div>
+</div>
+<div class="ml-4">
+<input checked="" class="h-6 w-6 rounded-full border-black bg-black text-white focus:ring-0 focus:ring-offset-0 transition-all cursor-pointer" type="checkbox"/>
+</div>
+</div>
+</div>
+</main>
+<div class="absolute bottom-28 right-6">
+<button class="flex items-center justify-center size-14 rounded-2xl bg-black text-white shadow-2xl shadow-black/20 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-2xl">add</span>
+</button>
+</div>
+<nav class="shrink-0 h-24 bg-white/80 ios-blur border-t border-gray-100 flex items-center justify-around px-8 pb-6">
+<div class="flex flex-col items-center gap-1.5 text-black">
+<span class="material-symbols-outlined text-[26px] fill-1">layers</span>
+<span class="text-[9px] font-bold uppercase tracking-tighter">Tasks</span>
+</div>
+<div class="flex flex-col items-center gap-1.5 text-gray-300">
+<span class="material-symbols-outlined text-[26px]">calendar_today</span>
+<span class="text-[9px] font-medium uppercase tracking-tighter">Calendar</span>
+</div>
+<div class="flex flex-col items-center gap-1.5 text-gray-300">
+<span class="material-symbols-outlined text-[26px]">person</span>
+<span class="text-[9px] font-medium uppercase tracking-tighter">Profile</span>
+</div>
+</nav>
+</div>
+
+</body></html>

@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: whatsapp-task-manager
+    runtime: python
+    buildCommand: pip install -r requirements.txt && python seed_data.py
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2
+    envVars:
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_WHATSAPP_NUMBER
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.6

@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard - Task Hub{% endblock %}
+{% block body %}
+<div class="max-w-6xl mx-auto px-6 py-8" dir="ltr">
+    <!-- Header -->
+    <div class="flex items-center justify-between mb-8">
+        <div class="flex items-center gap-3">
+            <span class="material-symbols-outlined text-primary text-3xl">task_alt</span>
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+                <p class="text-sm text-gray-500">System-wide analytics and user management</p>
+            </div>
+        </div>
+        <a href="/dashboard" class="px-4 py-2 bg-primary text-white rounded-xl text-sm font-semibold">Go to App</a>
+    </div>
+
+    <!-- KPI Grid -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="admin-kpis">
+        <div class="bg-white rounded-2xl p-5 shadow-card border border-gray-100">
+            <div class="flex items-center gap-2 mb-3">
+                <span class="material-symbols-outlined text-primary text-xl">group</span>
+                <span class="text-xs font-bold text-gray-400 uppercase">Total Users</span>
+            </div>
+            <p class="text-3xl font-bold" id="stat-users">--</p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-card border border-gray-100">
+            <div class="flex items-center gap-2 mb-3">
+                <span class="material-symbols-outlined text-accent-success text-xl">assignment</span>
+                <span class="text-xs font-bold text-gray-400 uppercase">Total Tasks</span>
+            </div>
+            <p class="text-3xl font-bold" id="stat-tasks">--</p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-card border border-gray-100">
+            <div class="flex items-center gap-2 mb-3">
+                <span class="material-symbols-outlined text-accent-warning text-xl">check_circle</span>
+                <span class="text-xs font-bold text-gray-400 uppercase">Completion Rate</span>
+            </div>
+            <p class="text-3xl font-bold" id="stat-completion">--</p>
+        </div>
+        <div class="bg-white rounded-2xl p-5 shadow-card border border-gray-100">
+            <div class="flex items-center gap-2 mb-3">
+                <span class="material-symbols-outlined text-whatsapp text-xl">chat</span>
+                <span class="text-xs font-bold text-gray-400 uppercase">Messages</span>
+            </div>
+            <p class="text-3xl font-bold" id="stat-messages">--</p>
+        </div>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6 mb-8">
+        <!-- Task Breakdown -->
+        <div class="bg-white rounded-2xl p-6 shadow-card border border-gray-100">
+            <h3 class="text-lg font-bold mb-4">Task Status Breakdown</h3>
+            <div class="space-y-4" id="task-breakdown">
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="font-medium text-gray-600">Completed</span>
+                        <span class="font-bold text-accent-success" id="breakdown-completed">0</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-accent-success rounded-full" id="bar-completed" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="font-medium text-gray-600">Pending</span>
+                        <span class="font-bold text-accent-warning" id="breakdown-pending">0</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-accent-warning rounded-full" id="bar-pending" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div>
+                    <div class="flex justify-between text-sm mb-1">
+                        <span class="font-medium text-gray-600">Overdue</span>
+                        <span class="font-bold text-accent-danger" id="breakdown-overdue">0</span>
+                    </div>
+                    <div class="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-accent-danger rounded-full" id="bar-overdue" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Users -->
+        <div class="bg-white rounded-2xl p-6 shadow-card border border-gray-100">
+            <h3 class="text-lg font-bold mb-4">Recent Users</h3>
+            <div class="space-y-3" id="recent-users">
+                <!-- Loaded via JS -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/app.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        const [statsRes, usersRes] = await Promise.all([
+            fetch('/api/admin/stats'),
+            fetch('/api/admin/users')
+        ]);
+        const stats = await statsRes.json();
+        const users = await usersRes.json();
+
+        document.getElementById('stat-users').textContent = stats.total_users || 0;
+        document.getElementById('stat-tasks').textContent = stats.total_tasks || 0;
+        document.getElementById('stat-completion').textContent = (stats.completion_rate || 0).toFixed(1) + '%';
+        document.getElementById('stat-messages').textContent = stats.total_messages || 0;
+
+        const total = (stats.completed_tasks || 0) + (stats.pending_tasks || 0) + (stats.overdue_tasks || 0) || 1;
+        document.getElementById('breakdown-completed').textContent = stats.completed_tasks || 0;
+        document.getElementById('breakdown-pending').textContent = stats.pending_tasks || 0;
+        document.getElementById('breakdown-overdue').textContent = stats.overdue_tasks || 0;
+        document.getElementById('bar-completed').style.width = ((stats.completed_tasks || 0) / total * 100) + '%';
+        document.getElementById('bar-pending').style.width = ((stats.pending_tasks || 0) / total * 100) + '%';
+        document.getElementById('bar-overdue').style.width = ((stats.overdue_tasks || 0) / total * 100) + '%';
+
+        const usersContainer = document.getElementById('recent-users');
+        usersContainer.textContent = '';
+        users.slice(0, 8).forEach(function(user) {
+            var div = document.createElement('div');
+            div.className = 'flex items-center justify-between py-2 border-b border-gray-50';
+            var left = document.createElement('div');
+            left.className = 'flex items-center gap-3';
+            var avatar = document.createElement('div');
+            avatar.className = 'w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center';
+            var icon = document.createElement('span');
+            icon.className = 'material-symbols-outlined text-primary text-sm';
+            icon.textContent = 'person';
+            avatar.appendChild(icon);
+            var info = document.createElement('div');
+            var nameEl = document.createElement('p');
+            nameEl.className = 'text-sm font-semibold';
+            nameEl.textContent = user.name || 'Unknown';
+            var phoneEl = document.createElement('p');
+            phoneEl.className = 'text-xs text-gray-400';
+            phoneEl.textContent = user.phone_number;
+            info.appendChild(nameEl);
+            info.appendChild(phoneEl);
+            left.appendChild(avatar);
+            left.appendChild(info);
+            var badge = document.createElement('span');
+            badge.className = 'text-xs font-medium text-gray-400';
+            badge.textContent = user.created_at ? user.created_at.split('T')[0] : '';
+            div.appendChild(left);
+            div.appendChild(badge);
+            usersContainer.appendChild(div);
+        });
+    } catch(e) {
+        console.error('Admin load error:', e);
+    }
+});
+</script>
+{% endblock %}

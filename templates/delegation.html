@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Task Management - Task Hub{% endblock %}
+{% block body %}
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-light max-w-md mx-auto shadow-2xl">
+    <!-- Header -->
+    <header class="sticky top-0 z-50 bg-background-light/80 backdrop-blur-md px-4 pt-6 pb-2 border-b border-slate-200">
+        <div class="flex items-center justify-between mb-4">
+            <a href="/dashboard?user_id={{ user_id }}" class="w-10 h-10 flex items-center justify-start">
+                <span class="material-symbols-outlined text-2xl">menu</span>
+            </a>
+            <h1 class="text-lg font-bold tracking-tight">Task Management</h1>
+            <div class="flex gap-2">
+                <button onclick="openAddTaskModal()" class="w-10 h-10 flex items-center justify-center">
+                    <span class="material-symbols-outlined text-2xl text-primary">add_circle</span>
+                </button>
+                <button class="w-10 h-10 flex items-center justify-end">
+                    <span class="material-symbols-outlined text-2xl">search</span>
+                </button>
+            </div>
+        </div>
+        <!-- Segmented Control -->
+        <div class="flex p-1 bg-slate-200 rounded-xl mb-2" id="view-toggle">
+            <button class="view-btn flex-1 py-1.5 text-sm font-semibold rounded-lg bg-white shadow-sm text-slate-900" data-view="my-tasks">My Tasks</button>
+            <button class="view-btn flex-1 py-1.5 text-sm font-medium text-slate-500" data-view="team-feed">Team Feed</button>
+        </div>
+    </header>
+
+    <main class="p-4 space-y-6 pb-32">
+        <!-- Overdue Section -->
+        <section id="overdue-section">
+            <div class="flex items-center justify-between mb-3 px-1">
+                <h2 class="text-xl font-bold text-red-600 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-xl">error</span>
+                    Overdue
+                </h2>
+                <span class="text-xs font-bold px-2 py-0.5 bg-red-100 text-red-600 rounded-full" id="overdue-badge">0 TASKS</span>
+            </div>
+            <div class="space-y-3" id="overdue-list">
+                <!-- Loaded via JS -->
+            </div>
+        </section>
+
+        <!-- Pending Others Section -->
+        <section id="delegated-section">
+            <div class="flex items-center justify-between mb-3 px-1">
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-xl">hourglass_empty</span>
+                    Pending Others
+                </h2>
+                <span class="text-xs font-medium text-slate-500">WHATSAPP SYNCED</span>
+            </div>
+            <div class="space-y-3" id="delegated-list">
+                <!-- Loaded via JS -->
+            </div>
+        </section>
+    </main>
+
+    <!-- FAB -->
+    <div class="fixed bottom-24 right-6 z-40">
+        <button onclick="openAddTaskModal()" class="w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center hover:scale-105 active:scale-95 transition-transform">
+            <span class="material-symbols-outlined text-3xl">add</span>
+        </button>
+    </div>
+
+    <!-- Bottom Nav -->
+    <nav class="fixed bottom-0 w-full max-w-md mx-auto bg-white/80 backdrop-blur-lg border-t border-slate-200 pb-8 pt-2 px-6 flex justify-between items-center z-50">
+        <a href="/tasks?user_id={{ user_id }}" class="flex flex-col items-center gap-1 text-slate-400">
+            <span class="material-symbols-outlined text-2xl">task_alt</span>
+            <span class="text-[10px] font-bold uppercase tracking-tighter">Tasks</span>
+        </a>
+        <a href="/delegation?user_id={{ user_id }}" class="flex flex-col items-center gap-1 text-primary">
+            <span class="material-symbols-outlined text-2xl">hub</span>
+            <span class="text-[10px] font-bold uppercase tracking-tighter">Delegation</span>
+        </a>
+        <a href="/dashboard?user_id={{ user_id }}" class="flex flex-col items-center gap-1 text-slate-400">
+            <span class="material-symbols-outlined text-2xl">chat_bubble</span>
+            <span class="text-[10px] font-bold uppercase tracking-tighter">Bot</span>
+        </a>
+        <a href="/analytics?user_id={{ user_id }}" class="flex flex-col items-center gap-1 text-slate-400">
+            <span class="material-symbols-outlined text-2xl">settings</span>
+            <span class="text-[10px] font-bold uppercase tracking-tighter">Settings</span>
+        </a>
+    </nav>
+</div>
+
+<!-- Add Task Modal -->
+<div id="add-task-modal" class="fixed inset-0 z-[100] hidden">
+    <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" onclick="closeAddTaskModal()"></div>
+    <div class="absolute bottom-0 left-0 right-0 max-w-md mx-auto bg-white rounded-t-3xl p-6 pb-10">
+        <div class="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-6"></div>
+        <h3 class="text-lg font-bold mb-6">Delegate Task</h3>
+        <form id="add-task-form" onsubmit="submitDelegatedTask(event)">
+            <div class="space-y-4">
+                <input type="text" name="title" placeholder="Task title..." required class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm"/>
+                <input type="text" name="assignee_name" placeholder="Assign to (name)..." class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm"/>
+                <input type="tel" name="assignee_phone" placeholder="Phone number..." dir="ltr" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm"/>
+                <input type="date" name="due_date" class="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm"/>
+                <button type="submit" class="w-full py-3.5 bg-primary text-white rounded-xl font-semibold text-sm">Delegate via WhatsApp</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="/static/js/app.js"></script>
+<script>
+const USER_ID = {{ user_id }};
+document.addEventListener('DOMContentLoaded', function() { initDelegationPage(USER_ID); });
+</script>
+{% endblock %}

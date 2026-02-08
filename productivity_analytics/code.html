@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Analytics White Edition</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#007AFF",
+                        "background-main": "#F2F2F7",
+                        "surface": "#FFFFFF",
+                        "accent-success": "#34C759",
+                        "accent-warning": "#FF9500",
+                        "accent-danger": "#FF3B30",
+                        "whatsapp": "#25D366",
+                    },
+                    fontFamily: {
+                        "sans": ["Inter", "system-ui", "sans-serif"]
+                    },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        body { font-family: 'Inter', sans-serif; -webkit-font-smoothing: antialiased; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .ios-shadow {
+            box-shadow: 0 1px 3px rgba(0,0,0,0.02), 0 1px 2px rgba(0,0,0,0.04);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-main text-slate-900 min-h-screen">
+<div class="relative flex h-auto min-h-screen w-full flex-col bg-background-main overflow-x-hidden max-w-[430px] mx-auto shadow-2xl border-x border-gray-200">
+<div class="h-12 bg-white/90 backdrop-blur-md sticky top-0 z-50"></div>
+<div class="sticky top-12 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
+<div class="flex items-center px-4 py-3 justify-between">
+<button class="text-primary flex items-center">
+<span class="material-symbols-outlined text-[24px]">chevron_left</span>
+<span class="text-[17px]">Back</span>
+</button>
+<h1 class="text-slate-900 text-[17px] font-semibold tracking-tight">Analytics</h1>
+<button class="text-primary text-[17px] font-normal">Export</button>
+</div>
+<div class="px-4 pb-3">
+<div class="flex p-0.5 bg-gray-100 rounded-lg">
+<button class="flex-1 py-1.5 text-[13px] font-medium rounded-md">Day</button>
+<button class="flex-1 py-1.5 text-[13px] font-semibold rounded-md bg-white shadow-sm">Week</button>
+<button class="flex-1 py-1.5 text-[13px] font-medium rounded-md">Month</button>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-6 p-4 pb-32">
+<div class="grid grid-cols-2 gap-3">
+<div class="bg-surface rounded-2xl p-4 ios-shadow flex flex-col gap-1 border border-white">
+<div class="flex items-center gap-1.5 opacity-60">
+<span class="material-symbols-outlined text-[18px]">check_circle</span>
+<span class="text-[11px] font-bold uppercase tracking-wider">Completion</span>
+</div>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-2xl font-bold text-slate-900 tracking-tight">84.2%</span>
+<span class="text-accent-success text-[12px] font-semibold">+5.1%</span>
+</div>
+</div>
+<div class="bg-surface rounded-2xl p-4 ios-shadow flex flex-col gap-1 border border-white">
+<div class="flex items-center gap-1.5 opacity-60">
+<span class="material-symbols-outlined text-[18px]">assignment</span>
+<span class="text-[11px] font-bold uppercase tracking-wider">Total Tasks</span>
+</div>
+<div class="flex items-baseline gap-2 mt-1">
+<span class="text-2xl font-bold text-slate-900 tracking-tight">42</span>
+<span class="text-accent-danger text-[12px] font-semibold">-2</span>
+</div>
+</div>
+</div>
+<div class="bg-surface rounded-2xl p-5 ios-shadow border border-white">
+<div class="flex justify-between items-center mb-6">
+<div>
+<h3 class="text-[17px] font-bold text-slate-900 leading-tight">Weekly Performance</h3>
+<p class="text-[13px] text-slate-500 font-medium">Completed tasks by channel</p>
+</div>
+<span class="material-symbols-outlined text-slate-300">calendar_today</span>
+</div>
+<div class="flex items-end justify-between h-48 px-1">
+<div class="flex flex-col items-center gap-3 w-full group">
+<div class="w-7 bg-gray-50 rounded-lg h-32 flex flex-col justify-end overflow-hidden relative">
+<div class="w-full bg-primary/20 h-[80%] absolute bottom-0"></div>
+<div class="w-full bg-primary h-[50%] absolute bottom-0 rounded-t-[2px]"></div>
+</div>
+<span class="text-[11px] font-semibold text-slate-400">Mon</span>
+</div>
+<div class="flex flex-col items-center gap-3 w-full">
+<div class="w-7 bg-gray-50 rounded-lg h-32 flex flex-col justify-end overflow-hidden relative">
+<div class="w-full bg-primary/20 h-[90%] absolute bottom-0"></div>
+<div class="w-full bg-primary h-[70%] absolute bottom-0 rounded-t-[2px]"></div>
+</div>
+<span class="text-[11px] font-semibold text-slate-400">Tue</span>
+</div>
+<div class="flex flex-col items-center gap-3 w-full">
+<div class="w-7 bg-gray-50 rounded-lg h-32 flex flex-col justify-end overflow-hidden relative">
+<div class="w-full bg-primary/20 h-[60%] absolute bottom-0"></div>
+<div class="w-full bg-primary h-[35%] absolute bottom-0 rounded-t-[2px]"></div>
+</div>
+<span class="text-[11px] font-semibold text-slate-400">Wed</span>
+</div>
+<div class="flex flex-col items-center gap-3 w-full">
+<div class="w-7 bg-gray-50 rounded-lg h-32 flex flex-col justify-end overflow-hidden relative">
+<div class="w-full bg-primary/20 h-[95%] absolute bottom-0"></div>
+<div class="w-full bg-primary h-[85%] absolute bottom-0 rounded-t-[2px]"></div>
+</div>
+<span class="text-[11px] font-semibold text-slate-900">Thu</span>
+</div>
+<div class="flex flex-col items-center gap-3 w-full">
+<div class="w-7 bg-gray-50 rounded-lg h-32 flex flex-col justify-end overflow-hidden relative">
+<div class="w-full bg-primary/20 h-[80%] absolute bottom-0"></div>
+<div class="w-full bg-primary h-[60%] absolute bottom-0 rounded-t-[2px]"></div>
+</div>
+<span class="text-[11px] font-semibold text-slate-400">Fri</span>
+</div>
+<div class="flex flex-col items-center gap-3 w-full">
+<div class="w-7 bg-gray-50 rounded-lg h-32 flex flex-col justify-end overflow-hidden relative">
+<div class="w-full bg-primary/20 h-[40%] absolute bottom-0"></div>
+<div class="w-full bg-primary h-[20%] absolute bottom-0 rounded-t-[2px]"></div>
+</div>
+<span class="text-[11px] font-semibold text-slate-400">Sat</span>
+</div>
+<div class="flex flex-col items-center gap-3 w-full">
+<div class="w-7 bg-gray-50 rounded-lg h-32 flex flex-col justify-end overflow-hidden relative">
+<div class="w-full bg-primary/20 h-[50%] absolute bottom-0"></div>
+<div class="w-full bg-primary h-[40%] absolute bottom-0 rounded-t-[2px]"></div>
+</div>
+<span class="text-[11px] font-semibold text-slate-400">Sun</span>
+</div>
+</div>
+<div class="mt-6 pt-4 border-t border-gray-50 flex gap-4">
+<div class="flex items-center gap-1.5">
+<div class="w-2.5 h-2.5 rounded-sm bg-primary"></div>
+<span class="text-[11px] font-medium text-slate-500">Completed</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-2.5 h-2.5 rounded-sm bg-primary/20"></div>
+<span class="text-[11px] font-medium text-slate-500">Created</span>
+</div>
+</div>
+</div>
+<div class="bg-surface rounded-2xl ios-shadow border border-white overflow-hidden">
+<div class="p-5 border-b border-gray-50">
+<div class="flex items-center gap-2 mb-1">
+<div class="bg-whatsapp/10 p-1 rounded-md">
+<span class="material-symbols-outlined text-whatsapp text-[20px]">chat</span>
+</div>
+<h3 class="text-[17px] font-bold text-slate-900 leading-tight">WhatsApp Source Flow</h3>
+</div>
+<p class="text-[13px] text-slate-500">Task distribution by input type</p>
+</div>
+<div class="p-0">
+<div class="flex items-center justify-between p-4 border-b border-gray-50">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600">
+<span class="material-symbols-outlined text-[20px]">mic</span>
+</div>
+<div>
+<p class="text-[15px] font-semibold text-slate-900">Voice Clips</p>
+<p class="text-[12px] text-slate-500">Avg. 15s per task</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-[15px] font-bold text-slate-900">64%</p>
+<div class="w-16 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 64%"></div>
+</div>
+</div>
+</div>
+<div class="flex items-center justify-between p-4 border-b border-gray-50">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600">
+<span class="material-symbols-outlined text-[20px]">keyboard</span>
+</div>
+<div>
+<p class="text-[15px] font-semibold text-slate-900">Text Input</p>
+<p class="text-[12px] text-slate-500">Quick entries</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-[15px] font-bold text-slate-900">36%</p>
+<div class="w-16 h-1.5 bg-gray-100 rounded-full mt-1 overflow-hidden">
+<div class="bg-accent-warning h-full rounded-full" style="width: 36%"></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 flex gap-4">
+<div class="bg-blue-100 w-10 h-10 rounded-full flex shrink-0 items-center justify-center text-blue-600">
+<span class="material-symbols-outlined text-[24px]">auto_awesome</span>
+</div>
+<div>
+<h4 class="text-[14px] font-bold text-blue-900 mb-0.5">Productivity Recommendation</h4>
+<p class="text-[13px] text-blue-800/80 leading-snug">
+                        Voice entries lead to <span class="font-bold">20% higher</span> completion rates. Try recording your tasks during your morning commute.
+                    </p>
+</div>
+</div>
+<div class="flex flex-col gap-3">
+<h3 class="text-[17px] font-bold text-slate-900 px-1">Recent Activity Log</h3>
+<div class="bg-surface rounded-2xl ios-shadow border border-white overflow-hidden divide-y divide-gray-50">
+<div class="flex items-center p-4">
+<div class="flex-1">
+<p class="text-[15px] font-semibold text-slate-900">Project scope review</p>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="text-[11px] font-bold text-primary uppercase bg-primary/5 px-1.5 py-0.5 rounded">Voice</span>
+<span class="text-[12px] text-slate-400">Today, 10:45 AM</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-accent-success text-[20px]">check_circle</span>
+</div>
+<div class="flex items-center p-4">
+<div class="flex-1">
+<p class="text-[15px] font-semibold text-slate-900">Schedule investor call</p>
+<div class="flex items-center gap-2 mt-0.5">
+<span class="text-[11px] font-bold text-accent-warning uppercase bg-accent-warning/5 px-1.5 py-0.5 rounded">Text</span>
+<span class="text-[12px] text-slate-400">Today, 09:12 AM</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-slate-200 text-[20px]">radio_button_unchecked</span>
+</div>
+</div>
+</div>
+</div>
+<div class="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-white/80 backdrop-blur-xl border-t border-gray-200/50 pt-3 pb-8 px-6">
+<div class="flex justify-around items-end">
+<button class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined text-[28px]">home</span>
+<span class="text-[10px] font-medium">Home</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined text-[28px]">checklist</span>
+<span class="text-[10px] font-medium">Tasks</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1">bar_chart</span>
+<span class="text-[10px] font-semibold">Analytics</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-gray-400">
+<span class="material-symbols-outlined text-[28px]">person</span>
+<span class="text-[10px] font-medium">Profile</span>
+</button>
+</div>
+<div class="mt-4 flex justify-center">
+<div class="w-32 h-1.5 bg-black/10 rounded-full"></div>
+</div>
+</div>
+</div>
+
+</body></html>

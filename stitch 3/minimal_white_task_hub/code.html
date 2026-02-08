@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Task Hub - Minimal White</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "background-light": "#fcfdfe",
+                        "background-dark": "#101922",
+                        "border-light": "#e5e7eb",
+                        "border-dark": "#2d3748",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .ios-shadow {
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.02), 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+        }
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 min-h-screen flex justify-center">
+<!-- Mobile Container -->
+<div class="relative w-full max-w-[390px] h-screen bg-white dark:bg-background-dark overflow-y-auto hide-scrollbar flex flex-col border-x border-border-light dark:border-border-dark">
+<!-- Status Bar Spacer (iOS) -->
+<div class="h-12 w-full"></div>
+<!-- TopAppBar -->
+<header class="sticky top-0 z-30 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-border-light dark:border-border-dark">
+<h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white">Task Hub</h1>
+<div class="flex gap-4 items-center">
+<button class="text-slate-500 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-[22px]">search</span>
+</button>
+<div class="size-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center border border-border-light dark:border-border-dark overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="User profile avatar photo" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCxV7I8aQ4yZTqqYFtZvRhJkiaAVqMZPFMouFcWEp08oEx_umh5R_Ic0QDr71G1feI2Y0R27A9uFUZro1WCxiFqgvMVJLVguiHapcE1C814w7-4N-ZUDGTlB3oVxhf3DSpm0AkYyqatyrlAvKceo_mfWfkmMfrtmXlJV7-Sp87La2Fl1ZqhHc2x-QnrincRFvfuVlUGgMLdSYlQT5qdsvUcynvbHtfIYC-aldHOdbDt7PDbZ6MZYvp2S3xFAHQHkk6QLN0mB8h5qls"/>
+</div>
+</div>
+</header>
+<!-- Segmented Control -->
+<div class="px-6 py-4">
+<div class="flex p-1 bg-slate-50 dark:bg-slate-900 border border-border-light dark:border-border-dark rounded-lg">
+<button class="flex-1 py-2 text-sm font-semibold rounded-md bg-white dark:bg-slate-800 text-primary ios-shadow border border-border-light/50 dark:border-border-dark">
+                    My Tasks
+                </button>
+<button class="flex-1 py-2 text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
+                    Assigned
+                </button>
+</div>
+</div>
+<!-- Main Content Section: My Tasks -->
+<main class="flex-1 px-6 pb-24">
+<div class="flex items-center justify-between mb-4 mt-2">
+<h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Active Tasks</h2>
+<span class="text-[10px] font-medium bg-primary/10 text-primary px-2 py-0.5 rounded-full">3 Synced</span>
+</div>
+<div class="space-y-3">
+<!-- Task Item 1 -->
+<div class="group flex items-start gap-4 p-4 bg-white dark:bg-slate-900/50 border border-border-light dark:border-border-dark rounded-xl transition-all hover:border-primary/30">
+<label class="mt-0.5">
+<input class="size-5 rounded-full border-slate-300 text-primary focus:ring-primary/20 cursor-pointer" type="checkbox"/>
+</label>
+<div class="flex-1">
+<h3 class="text-[15px] font-medium text-slate-800 dark:text-slate-200 leading-snug">Finalize Q4 Marketing Deck</h3>
+<div class="flex items-center gap-3 mt-2">
+<span class="flex items-center gap-1 text-[11px] text-slate-400">
+<span class="material-symbols-outlined text-sm text-green-500">chat</span>
+                                WhatsApp Bot
+                            </span>
+<span class="text-[11px] text-slate-300 dark:text-slate-600">•</span>
+<span class="text-[11px] text-slate-400">Today, 5:00 PM</span>
+</div>
+</div>
+</div>
+<!-- Task Item 2 -->
+<div class="group flex items-start gap-4 p-4 bg-white dark:bg-slate-900/50 border border-border-light dark:border-border-dark rounded-xl transition-all hover:border-primary/30">
+<label class="mt-0.5">
+<input checked="" class="size-5 rounded-full border-slate-300 text-primary focus:ring-primary/20 cursor-pointer" type="checkbox"/>
+</label>
+<div class="flex-1">
+<h3 class="text-[15px] font-medium text-slate-400 dark:text-slate-500 line-through leading-snug">Review technical documentation</h3>
+<div class="flex items-center gap-3 mt-2">
+<span class="flex items-center gap-1 text-[11px] text-slate-400">
+<span class="material-symbols-outlined text-sm">schedule</span>
+                                Completed
+                            </span>
+</div>
+</div>
+</div>
+<!-- Task Item 3 -->
+<div class="group flex items-start gap-4 p-4 bg-white dark:bg-slate-900/50 border border-border-light dark:border-border-dark rounded-xl transition-all hover:border-primary/30">
+<label class="mt-0.5">
+<input class="size-5 rounded-full border-slate-300 text-primary focus:ring-primary/20 cursor-pointer" type="checkbox"/>
+</label>
+<div class="flex-1">
+<h3 class="text-[15px] font-medium text-slate-800 dark:text-slate-200 leading-snug">Call vendor for shipment update</h3>
+<div class="flex items-center gap-3 mt-2">
+<span class="flex items-center gap-1 text-[11px] text-slate-400">
+<span class="material-symbols-outlined text-sm text-primary">priority_high</span>
+                                High Priority
+                            </span>
+<span class="text-[11px] text-slate-300 dark:text-slate-600">•</span>
+<span class="text-[11px] text-slate-400">Tomorrow</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Delegated Progress Preview Section -->
+<div class="mt-10 mb-4 flex items-center justify-between">
+<h2 class="text-xs font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Delegated via WhatsApp</h2>
+<button class="text-[11px] font-semibold text-primary">View All</button>
+</div>
+<div class="grid grid-cols-1 gap-3">
+<!-- Person Card 1 -->
+<div class="p-4 bg-slate-50 dark:bg-slate-900/80 border border-border-light dark:border-border-dark rounded-xl flex items-center gap-4">
+<div class="size-10 rounded-lg bg-white dark:bg-slate-800 border border-border-light dark:border-border-dark overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Female professional portrait avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-4JQVJpNzYLyGFwE80shQpCXpu9dzRqGll0-vHRRSu32BREiSWVYIVFdSE3hs8pJzdIJp1BO0jwhbdQZiGgquy7fTJEp7FOpu0oZm_GpNgtiE8-gLhBqMQpTx4vRhIbH7JxbOLCesbr728-KtgNjh3ecAwhsEZEy9-5xTWFZe7kXI7O9q8gm_tPU1Mqubp_vVTEJuFW4C3oaREnZuel1u0EFRPYvf_LsTzsVpbe7RvJSWKJwO_Jo0qw6EXugUiCSTiMB8xIgz8Ao"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200">Sarah Miller</h4>
+<span class="text-[10px] font-medium text-slate-400">3/5 Done</span>
+</div>
+<!-- Progress Bar -->
+<div class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mt-2 overflow-hidden">
+<div class="h-full bg-primary w-[60%] rounded-full"></div>
+</div>
+</div>
+</div>
+<!-- Person Card 2 -->
+<div class="p-4 bg-slate-50 dark:bg-slate-900/80 border border-border-light dark:border-border-dark rounded-xl flex items-center gap-4">
+<div class="size-10 rounded-lg bg-white dark:bg-slate-800 border border-border-light dark:border-border-dark overflow-hidden flex-shrink-0">
+<img class="w-full h-full object-cover" data-alt="Male professional portrait avatar" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCmQxAHn0J8tOJJHo7TaXsMWyrH4JUc-DakX3GQxL0RcZThI5r7RM3Gp9OL2SHhzmQE_FR39gBsSfZ79O2hmOt06thPEbsUAXFhwjibe_0AGhulLrD8Op06HxkDwKIA5IXnCnp7_HT6Lc_mHEnSJXt6-gBKyqJHtC7eOJYpOibrOukD4mrEIb2Omi5-auv1-hXO7nyNOK9AAosFw2aNA0atrwIEL_DAVQXJULVvw2az7lbbFo4oOGwpJE-Cui2Mf9IQZpLBylzlvoE"/>
+</div>
+<div class="flex-1">
+<div class="flex justify-between items-start">
+<h4 class="text-sm font-semibold text-slate-800 dark:text-slate-200">John Doe</h4>
+<span class="text-[10px] font-medium text-slate-400 text-orange-500">Pending Sync</span>
+</div>
+<div class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mt-2 overflow-hidden">
+<div class="h-full bg-slate-300 dark:bg-slate-600 w-[10%] rounded-full"></div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Floating Action Button -->
+<button class="fixed bottom-8 left-1/2 -translate-x-1/2 size-14 bg-primary text-white rounded-full shadow-lg shadow-primary/30 flex items-center justify-center z-40 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-3xl">add</span>
+</button>
+<!-- Bottom Tab Bar -->
+<nav class="sticky bottom-0 bg-white/95 dark:bg-background-dark/95 backdrop-blur-md border-t border-border-light dark:border-border-dark flex justify-around py-3 px-6 z-30">
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined text-[24px]">home</span>
+<span class="text-[10px] font-medium">Dashboard</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-slate-600">
+<span class="material-symbols-outlined text-[24px]">chat_bubble</span>
+<span class="text-[10px] font-medium">Bot Logs</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-slate-600">
+<span class="material-symbols-outlined text-[24px]">group</span>
+<span class="text-[10px] font-medium">Team</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-slate-400 dark:text-slate-500 hover:text-slate-600">
+<span class="material-symbols-outlined text-[24px]">settings</span>
+<span class="text-[10px] font-medium">Settings</span>
+</button>
+</nav>
+</div>
+</body></html>
