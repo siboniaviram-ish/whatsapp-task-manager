@@ -173,6 +173,9 @@ def log_message(user_id, direction, message_type, content):
         The log entry's ID, or None on failure.
     """
     try:
+        # Normalize message_type for DB constraint compatibility
+        if message_type not in ('text', 'voice', 'image', 'interactive', 'contact'):
+            message_type = 'text'
         db = get_db()
         cursor = db.execute(
             """INSERT INTO message_log

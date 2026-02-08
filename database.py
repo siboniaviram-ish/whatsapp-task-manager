@@ -107,7 +107,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER REFERENCES users(id),
             direction TEXT CHECK(direction IN ('incoming', 'outgoing')),
-            message_type TEXT CHECK(message_type IN ('text', 'voice', 'image', 'interactive')),
+            message_type TEXT CHECK(message_type IN ('text', 'voice', 'image', 'interactive', 'contact')),
             content TEXT,
             voice_duration INTEGER,
             transcription TEXT,

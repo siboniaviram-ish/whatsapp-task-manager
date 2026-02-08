@@ -77,6 +77,16 @@ BUTTON_TEXT_MAP = {
     '❌ לא יכול': 'decline',
 }
 
+# Actions that take priority over active flows (from reminders, invites, navigation).
+# Without this, clicking a reminder button while in a flow would feed the button
+# text into the flow instead of handling the reminder action.
+PRIORITY_ACTIONS = {
+    'task_done', 'snooze_30', 'snooze_60',
+    'accept_delegation', 'decline_delegation',
+    'accept_meeting', 'decline_meeting', 'decline',
+    'main_menu',
+}
+
 
 # ---------------------------------------------------------------------------
 # Main entry point
@@ -136,6 +146,13 @@ def handle_incoming_message(from_number, message_body, message_type='text',
             send_text(from_number, "❌ הפעולה בוטלה.")
             send_main_menu(from_number)
             return
+
+        # Priority actions (reminders, invites, menu) - must be handled
+        # even when an unrelated flow is active.
+        if action_id in PRIORITY_ACTIONS:
+            if action_id == 'main_menu':
+                ConversationFlow.clear_flow(user_id)
+            return _handle_global_action(user_id, from_number, action_id)
 
         # Active flow
         flow_name, flow_data = ConversationFlow.get_flow(user_id)
@@ -243,8 +260,27 @@ def _handle_global_action(user_id, phone, action_id):
         _handle_snooze(user_id, phone, minutes)
     elif action_id == 'accept_delegation':
         _handle_delegation_response(user_id, phone, accepted=True)
-    elif action_id in ('decline_delegation', 'decline'):
+    elif action_id == 'decline_delegation':
         _handle_delegation_response(user_id, phone, accepted=False)
+    elif action_id == 'decline':
+        # Ambiguous text fallback ("❌ לא יכול" is used for both delegation
+        # and meeting invites) - check what the user actually has pending.
+        db = None
+        try:
+            db = get_db()
+            has_meeting = db.execute(
+                "SELECT 1 FROM meeting_participants WHERE phone_number = ? AND status = 'pending' LIMIT 1",
+                (phone,)
+            ).fetchone()
+        except Exception:
+            has_meeting = None
+        finally:
+            if db:
+                db.close()
+        if has_meeting:
+            _handle_meeting_response(user_id, phone, accepted=False)
+        else:
+            _handle_delegation_response(user_id, phone, accepted=False)
     elif action_id == 'accept_meeting':
         _handle_meeting_response(user_id, phone, accepted=True)
     elif action_id == 'decline_meeting':
