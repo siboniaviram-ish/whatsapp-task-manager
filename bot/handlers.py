@@ -7,6 +7,7 @@ commands, active conversation flows, voice messages, or help.
 import logging
 from datetime import date, datetime
 
+from config import Config
 from database import get_db
 from services.task_service import (
     create_task,
@@ -27,6 +28,8 @@ from bot.templates import (
     TASK_CREATED,
     TASK_COMPLETED,
     VOICE_CONFIRMED,
+    VOICE_FLOW_CONFIRM,
+    VOICE_FAILED,
     DELEGATION_SENT,
     DELEGATION_RECEIVED,
     MEETING_CREATED,
@@ -45,6 +48,7 @@ from bot.templates import (
     PROMPT_MEETING_DATE,
     PROMPT_MEETING_TIME,
     PROMPT_MEETING_PARTICIPANTS,
+    PROMPT_MEETING_LOCATION,
     PROMPT_VOICE_INSTRUCTION,
     FLOW_CANCELLED,
 )
@@ -52,6 +56,8 @@ from bot.commands import get_command, is_cancel, get_confirmation
 from bot.flows import ConversationFlow
 
 logger = logging.getLogger(__name__)
+
+DASHBOARD_URL = Config.APP_URL
 
 
 # ---------------------------------------------------------------------------
@@ -61,22 +67,6 @@ logger = logging.getLogger(__name__)
 def handle_incoming_message(from_number, message_body, message_type='text', media_url=None):
     """
     Main entry point for incoming WhatsApp messages.
-
-    Steps:
-        1. Find or create user by phone number.
-        2. Log the incoming message.
-        3. Check for an active conversation flow.
-        4. If in a flow, continue that flow.
-        5. Otherwise, parse as a command or show help.
-
-    Args:
-        from_number: The sender's phone number (e.g. 'whatsapp:+972...').
-        message_body: The text body of the message (may be empty for voice).
-        message_type: 'text', 'voice', 'image', or 'interactive'.
-        media_url: URL of attached media (for voice messages).
-
-    Returns:
-        str: The response message text to send back.
     """
     try:
         # 1. Get or create the user
@@ -90,7 +80,12 @@ def handle_incoming_message(from_number, message_body, message_type='text', medi
 
         # 3. Handle voice messages
         if message_type == 'voice' and media_url:
-            return _handle_voice(user_id, from_number, media_url)
+            # Check if user is in an active flow
+            flow_name, flow_data = ConversationFlow.get_flow(user_id)
+            if flow_name and flow_name not in ('voice_confirm', 'voice_pending'):
+                return _handle_voice_in_flow(user_id, from_number, media_url, flow_name, flow_data)
+            else:
+                return _handle_voice(user_id, from_number, media_url)
 
         # Normalize text
         text = message_body.strip() if message_body else ''
@@ -137,15 +132,7 @@ def handle_incoming_message(from_number, message_body, message_type='text', medi
 # ---------------------------------------------------------------------------
 
 def _get_or_create_user(phone):
-    """
-    Find a user by phone number or create a new one.
-
-    Args:
-        phone: Phone number string.
-
-    Returns:
-        int: The user's database ID.
-    """
+    """Find a user by phone number or create a new one."""
     db = None
     try:
         db = get_db()
@@ -154,7 +141,6 @@ def _get_or_create_user(phone):
         ).fetchone()
 
         if row:
-            # Update last_active timestamp
             db.execute(
                 "UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?",
                 (row['id'],)
@@ -184,17 +170,7 @@ def _get_or_create_user(phone):
 # ---------------------------------------------------------------------------
 
 def _handle_command(user_id, phone, command):
-    """
-    Route a recognized command to the appropriate action.
-
-    Args:
-        user_id: User's database ID.
-        phone: User's phone number.
-        command: Internal command name string.
-
-    Returns:
-        str: Response message.
-    """
+    """Route a recognized command to the appropriate action."""
     try:
         if command == 'welcome':
             response = WELCOME + "\n\n" + MAIN_MENU
@@ -207,9 +183,7 @@ def _handle_command(user_id, phone, command):
             return response
 
         elif command == 'new_task' or command == 'task_today':
-            # Start the task creation flow
             if command == 'task_today':
-                # Pre-set date to today
                 ConversationFlow.set_flow(user_id, 'create_task', {
                     'due_date': date.today().strftime('%d/%m/%Y')
                 })
@@ -220,21 +194,18 @@ def _handle_command(user_id, phone, command):
             return response
 
         elif command == 'task_scheduled':
-            # Start task creation flow, will ask for date
             ConversationFlow.set_flow(user_id, 'create_task', {})
             response = PROMPT_TASK_TITLE
             send_message(phone, response)
             return response
 
         elif command == 'task_delegate':
-            # Start delegation flow
             ConversationFlow.set_flow(user_id, 'delegate_task', {})
             response = PROMPT_DELEGATE_TASK
             send_message(phone, response)
             return response
 
         elif command == 'schedule_meeting':
-            # Start meeting flow
             ConversationFlow.set_flow(user_id, 'schedule_meeting', {})
             response = PROMPT_MEETING_SUBJECT
             send_message(phone, response)
@@ -252,7 +223,6 @@ def _handle_command(user_id, phone, command):
             return response
 
         elif command == 'complete':
-            # Get today's pending tasks and complete the most recent one
             tasks = get_today_tasks(user_id)
             pending = [t for t in tasks if t['status'] == 'pending']
             if pending:
@@ -270,12 +240,11 @@ def _handle_command(user_id, phone, command):
             return response
 
         elif command == 'meetings':
-            # Show tasks of type 'meeting'
             db = None
             try:
                 db = get_db()
                 meetings = db.execute(
-                    "SELECT m.title, m.meeting_date, m.start_time, m.status "
+                    "SELECT m.title, m.meeting_date, m.start_time, m.location, m.status "
                     "FROM meetings m WHERE m.organizer_id = ? AND m.status = 'scheduled' "
                     "ORDER BY m.meeting_date ASC",
                     (user_id,)
@@ -287,8 +256,10 @@ def _handle_command(user_id, phone, command):
             if meetings:
                 lines = ["📅 *הפגישות שלך:*\n━━━━━━━━━━━━━━━\n"]
                 for m in meetings:
+                    location = m['location'] if m['location'] else ''
+                    loc_str = f" | 📍 {location}" if location else ''
                     lines.append(
-                        f"📌 {m['title']} | 🗓️ {m['meeting_date']} | 🕐 {m['start_time']}\n"
+                        f"📌 {m['title']} | 🗓️ {m['meeting_date']} | 🕐 {m['start_time']}{loc_str}\n"
                     )
                 response = ''.join(lines)
             else:
@@ -312,29 +283,16 @@ def _handle_command(user_id, phone, command):
 # ---------------------------------------------------------------------------
 
 def _handle_voice(user_id, phone, media_url):
-    """
-    Process an incoming voice message: transcribe, extract task, ask for confirmation.
-
-    Args:
-        user_id: User's database ID.
-        phone: User's phone number.
-        media_url: URL of the voice media.
-
-    Returns:
-        str: Response message.
-    """
+    """Process an incoming voice message: transcribe, extract task, ask for confirmation."""
     try:
         transcript = transcribe_audio(media_url)
 
         if not transcript:
-            response = "🎤 לא הצלחתי לזהות את ההודעה הקולית. אנא נסה שוב."
-            send_message(phone, response)
-            return response
+            send_message(phone, VOICE_FAILED)
+            return VOICE_FAILED
 
-        # Extract task from transcript
         task_info = extract_task_from_transcript(transcript)
 
-        # Store transcript in flow data and ask for confirmation
         flow_data = {
             'transcript': transcript,
             'task_title': task_info.get('title', transcript) if isinstance(task_info, dict) else transcript,
@@ -352,39 +310,53 @@ def _handle_voice(user_id, phone, media_url):
         return ERROR
 
 
+def _handle_voice_in_flow(user_id, phone, media_url, flow_name, flow_data):
+    """Handle voice message received while in an active conversation flow."""
+    try:
+        transcript = transcribe_audio(media_url)
+
+        if not transcript:
+            send_message(phone, VOICE_FAILED)
+            return VOICE_FAILED
+
+        # Store voice data and original flow
+        flow_data['_pending_voice'] = transcript
+        flow_data['_return_flow'] = flow_name
+        ConversationFlow.set_flow(user_id, 'voice_pending', flow_data)
+
+        response = VOICE_FLOW_CONFIRM.format(transcript=transcript)
+        send_message(phone, response)
+        return response
+
+    except Exception as e:
+        logger.error("Error handling voice in flow for user %s: %s", user_id, e, exc_info=True)
+        send_message(phone, ERROR)
+        return ERROR
+
+
 # ---------------------------------------------------------------------------
 # Flow handler (dispatcher)
 # ---------------------------------------------------------------------------
 
 def _handle_flow(user_id, phone, text, flow_name, flow_data):
-    """
-    Continue an active conversation flow based on its current state.
-
-    Args:
-        user_id: User's database ID.
-        phone: User's phone number.
-        text: User's input text.
-        flow_name: Current flow name string.
-        flow_data: Current flow data dict.
-
-    Returns:
-        str: Response message.
-    """
+    """Continue an active conversation flow based on its current state."""
     try:
-        if flow_name in ('create_task', 'create_task_date'):
+        if flow_name == 'voice_pending':
+            return _handle_voice_pending(user_id, phone, text, flow_data)
+
+        elif flow_name in ('create_task', 'create_task_date'):
             return _handle_create_task_flow(user_id, phone, text, flow_data)
 
         elif flow_name in ('delegate_task', 'delegate_contact', 'delegate_details'):
             return _handle_delegate_flow(user_id, phone, text, flow_data)
 
-        elif flow_name in ('schedule_meeting', 'meeting_contact', 'meeting_time', 'meeting_subject'):
+        elif flow_name in ('schedule_meeting', 'meeting_contact', 'meeting_time', 'meeting_subject', 'meeting_location'):
             return _handle_meeting_flow(user_id, phone, text, flow_data)
 
         elif flow_name == 'voice_confirm':
             return _handle_voice_confirm_flow(user_id, phone, text, flow_data)
 
         else:
-            # Unknown flow -- clear and show menu
             ConversationFlow.clear_flow(user_id)
             response = MAIN_MENU
             send_message(phone, response)
@@ -398,26 +370,80 @@ def _handle_flow(user_id, phone, text, flow_name, flow_data):
 
 
 # ---------------------------------------------------------------------------
+# Voice pending handler (confirmation of voice in active flow)
+# ---------------------------------------------------------------------------
+
+def _handle_voice_pending(user_id, phone, text, flow_data):
+    """Handle response to voice transcription confirmation in an active flow."""
+    cleaned = text.strip()
+
+    if cleaned in ('1', 'כן', 'אשר'):
+        # Confirmed - continue with transcription
+        transcript = flow_data.pop('_pending_voice', '')
+        return_flow = flow_data.pop('_return_flow', None)
+
+        if not return_flow:
+            ConversationFlow.clear_flow(user_id)
+            response = MAIN_MENU
+            send_message(phone, response)
+            return response
+
+        ConversationFlow.set_flow(user_id, return_flow, flow_data)
+        return _handle_flow(user_id, phone, transcript, return_flow, flow_data)
+
+    elif cleaned in ('2', 'לא'):
+        # Denied - go back to original prompt
+        flow_data.pop('_pending_voice', None)
+        return_flow = flow_data.pop('_return_flow', None)
+
+        if not return_flow:
+            ConversationFlow.clear_flow(user_id)
+            response = MAIN_MENU
+            send_message(phone, response)
+            return response
+
+        ConversationFlow.set_flow(user_id, return_flow, flow_data)
+        response = _get_step_prompt(return_flow, flow_data)
+        send_message(phone, response)
+        return response
+
+    else:
+        response = "שלח *1* לאישור או *2* להקלדה/הקלטה מחדש."
+        send_message(phone, response)
+        return response
+
+
+def _get_step_prompt(flow_name, flow_data):
+    """Return the appropriate prompt for the current step in a flow."""
+    if flow_name in ('create_task', 'create_task_date'):
+        if 'title' not in flow_data:
+            return PROMPT_TASK_TITLE
+        return PROMPT_TASK_DATE
+    elif flow_name in ('delegate_task', 'delegate_contact', 'delegate_details'):
+        if 'task_title' not in flow_data:
+            return PROMPT_DELEGATE_TASK
+        elif 'assignee' not in flow_data:
+            return PROMPT_DELEGATE_CONTACT
+        return PROMPT_DELEGATE_DATE
+    elif flow_name in ('schedule_meeting', 'meeting_contact', 'meeting_time', 'meeting_subject', 'meeting_location'):
+        if 'title' not in flow_data:
+            return PROMPT_MEETING_SUBJECT
+        elif 'date' not in flow_data:
+            return PROMPT_MEETING_DATE
+        elif 'time' not in flow_data:
+            return PROMPT_MEETING_TIME
+        elif 'participants' not in flow_data:
+            return PROMPT_MEETING_PARTICIPANTS
+        return PROMPT_MEETING_LOCATION
+    return PROMPT_TASK_TITLE
+
+
+# ---------------------------------------------------------------------------
 # Task creation flow
 # ---------------------------------------------------------------------------
 
 def _handle_create_task_flow(user_id, phone, text, flow_data):
-    """
-    Handle the multi-step task creation flow.
-
-    Steps:
-        1. 'create_task' state: collect task title, move to date step
-        2. 'create_task_date' state: collect due date, create the task
-
-    Args:
-        user_id: User's database ID.
-        phone: User's phone number.
-        text: User's latest input text.
-        flow_data: Current flow data dict.
-
-    Returns:
-        str: Response message.
-    """
+    """Handle the multi-step task creation flow."""
     if 'title' not in flow_data:
         # Step 1: We received the task title
         flow_data['title'] = text
@@ -445,17 +471,7 @@ def _handle_create_task_flow(user_id, phone, text, flow_data):
 
 
 def _finalize_task_creation(user_id, phone, flow_data):
-    """
-    Create the task in the database and send confirmation.
-
-    Args:
-        user_id: User's database ID.
-        phone: User's phone number.
-        flow_data: Dict with 'title' and 'due_date'.
-
-    Returns:
-        str: Response message.
-    """
+    """Create the task in the database and send confirmation."""
     title = flow_data['title']
     due_date_str = flow_data.get('due_date', date.today().strftime('%d/%m/%Y'))
 
@@ -468,10 +484,8 @@ def _finalize_task_creation(user_id, phone, flow_data):
         except ValueError:
             due_date = date.today()
 
-    # Determine task type
     task_type = 'today' if due_date == date.today() else 'scheduled'
 
-    # Create the task
     task_data = {
         'title': title,
         'task_type': task_type,
@@ -480,7 +494,6 @@ def _finalize_task_creation(user_id, phone, flow_data):
     }
     task = create_task(user_id, task_data)
 
-    # Create reminders for the task
     try:
         task_id = task if isinstance(task, int) else task.get('id') if isinstance(task, dict) else None
         if task_id:
@@ -488,11 +501,10 @@ def _finalize_task_creation(user_id, phone, flow_data):
     except Exception as e:
         logger.warning("Failed to create reminders for task: %s", e)
 
-    # Clear the flow
     ConversationFlow.clear_flow(user_id)
 
     display_date = due_date.strftime('%d/%m/%Y')
-    response = TASK_CREATED.format(title=title, due_date=display_date)
+    response = TASK_CREATED.format(title=title, due_date=display_date, dashboard_url=DASHBOARD_URL)
     send_message(phone, response)
     return response
 
@@ -502,23 +514,7 @@ def _finalize_task_creation(user_id, phone, flow_data):
 # ---------------------------------------------------------------------------
 
 def _handle_delegate_flow(user_id, phone, text, flow_data):
-    """
-    Handle the multi-step task delegation flow.
-
-    Steps:
-        1. 'delegate_task' state: collect task description
-        2. 'delegate_contact' state: collect assignee phone/name
-        3. 'delegate_details' state: collect due date, create and send
-
-    Args:
-        user_id: User's database ID.
-        phone: User's phone number.
-        text: User's latest input text.
-        flow_data: Current flow data dict.
-
-    Returns:
-        str: Response message.
-    """
+    """Handle the multi-step task delegation flow."""
     if 'task_title' not in flow_data:
         # Step 1: collect the task description
         flow_data['task_title'] = text
@@ -542,7 +538,6 @@ def _handle_delegate_flow(user_id, phone, text, flow_data):
             due_date_str = date.today().strftime('%d/%m/%Y')
         flow_data['due_date'] = due_date_str
 
-        # Parse date
         try:
             due_date = datetime.strptime(due_date_str, '%d/%m/%Y').date()
         except ValueError:
@@ -551,7 +546,6 @@ def _handle_delegate_flow(user_id, phone, text, flow_data):
             except ValueError:
                 due_date = date.today()
 
-        # Create the delegated task
         task_data = {
             'title': flow_data['task_title'],
             'task_type': 'delegated',
@@ -563,7 +557,6 @@ def _handle_delegate_flow(user_id, phone, text, flow_data):
         task_id = task if isinstance(task, int) else task.get('id') if isinstance(task, dict) else None
         assignee = flow_data['assignee']
 
-        # Record delegation in the database
         if task_id:
             db = None
             try:
@@ -582,21 +575,20 @@ def _handle_delegate_flow(user_id, phone, text, flow_data):
                 if db:
                     db.close()
 
-        # Send delegation message to the assignee
         display_date = due_date.strftime('%d/%m/%Y')
         try:
-            delegator_name = phone  # Use phone as fallback name
+            delegator_name = phone
             send_delegation_message(assignee, delegator_name, flow_data['task_title'], display_date)
         except Exception as e:
             logger.warning("Failed to send delegation message to %s: %s", assignee, e)
 
-        # Clear the flow
         ConversationFlow.clear_flow(user_id)
 
         response = DELEGATION_SENT.format(
             assignee_name=assignee,
             task_title=flow_data['task_title'],
             due_date=display_date,
+            dashboard_url=DASHBOARD_URL,
         )
         send_message(phone, response)
         return response
@@ -607,24 +599,7 @@ def _handle_delegate_flow(user_id, phone, text, flow_data):
 # ---------------------------------------------------------------------------
 
 def _handle_meeting_flow(user_id, phone, text, flow_data):
-    """
-    Handle the multi-step meeting scheduling flow.
-
-    Steps:
-        1. 'schedule_meeting' / 'meeting_subject' state: collect subject
-        2. 'meeting_time' state: collect date
-        3. After date, collect time
-        4. 'meeting_contact' state: collect participants, finalize
-
-    Args:
-        user_id: User's database ID.
-        phone: User's phone number.
-        text: User's latest input text.
-        flow_data: Current flow data dict.
-
-    Returns:
-        str: Response message.
-    """
+    """Handle the multi-step meeting scheduling flow with location."""
     if 'title' not in flow_data:
         # Step 1: collect meeting subject
         flow_data['title'] = text
@@ -652,10 +627,21 @@ def _handle_meeting_flow(user_id, phone, text, flow_data):
         send_message(phone, response)
         return response
 
-    else:
-        # Step 4: collect participants and finalize
+    elif 'participants' not in flow_data:
+        # Step 4: collect participants
         participants_raw = text.strip()
-        participants = [p.strip() for p in participants_raw.split(',') if p.strip()]
+        flow_data['participants'] = [p.strip() for p in participants_raw.split(',') if p.strip()]
+        ConversationFlow.set_flow(user_id, 'meeting_location', flow_data)
+        response = PROMPT_MEETING_LOCATION
+        send_message(phone, response)
+        return response
+
+    else:
+        # Step 5: collect location and finalize
+        location = text.strip()
+        if location in ('ללא', 'אין', 'none', '-'):
+            location = ''
+        flow_data['location'] = location
 
         # Parse date
         try:
@@ -671,6 +657,7 @@ def _handle_meeting_flow(user_id, phone, text, flow_data):
             'title': flow_data['title'],
             'meeting_date': meeting_date.isoformat(),
             'start_time': flow_data['time'],
+            'location': location,
         }
         meeting = create_meeting(user_id, meeting_data)
 
@@ -678,6 +665,7 @@ def _handle_meeting_flow(user_id, phone, text, flow_data):
 
         # Add participants and send invites
         display_date = meeting_date.strftime('%d/%m/%Y')
+        participants = flow_data.get('participants', [])
         for participant in participants:
             try:
                 if meeting_id:
@@ -686,18 +674,20 @@ def _handle_meeting_flow(user_id, phone, text, flow_data):
                     'title': flow_data['title'],
                     'meeting_date': display_date,
                     'start_time': flow_data['time'],
+                    'location': location or 'לא צוין',
                 }
                 send_meeting_invite(participant, invite_data)
             except Exception as e:
                 logger.warning("Failed to invite participant %s: %s", participant, e)
 
-        # Clear the flow
         ConversationFlow.clear_flow(user_id)
 
         response = MEETING_CREATED.format(
             title=flow_data['title'],
             date=display_date,
             time=flow_data['time'],
+            location=location or 'לא צוין',
+            dashboard_url=DASHBOARD_URL,
         )
         send_message(phone, response)
         return response
@@ -708,35 +698,21 @@ def _handle_meeting_flow(user_id, phone, text, flow_data):
 # ---------------------------------------------------------------------------
 
 def _handle_voice_confirm_flow(user_id, phone, text, flow_data):
-    """
-    Handle confirmation of a voice-transcribed task.
+    """Handle confirmation of a voice-transcribed task."""
+    cleaned = text.strip()
 
-    Args:
-        user_id: User's database ID.
-        phone: User's phone number.
-        text: User's confirmation response.
-        flow_data: Dict with 'transcript', 'task_title', 'due_date'.
-
-    Returns:
-        str: Response message.
-    """
-    confirmation = get_confirmation(text)
-
-    if confirmation is True:
-        # User confirmed -- create the task
+    if cleaned in ('1', 'כן', 'אשר'):
         return _finalize_task_creation(user_id, phone, {
             'title': flow_data.get('task_title', flow_data.get('transcript', '')),
             'due_date': flow_data.get('due_date', date.today().strftime('%d/%m/%Y')),
         })
-    elif confirmation is False:
-        # User declined
+    elif cleaned in ('2', 'לא'):
         ConversationFlow.clear_flow(user_id)
         response = FLOW_CANCELLED + "\n\n" + MAIN_MENU
         send_message(phone, response)
         return response
     else:
-        # Unrecognized response -- ask again
-        response = "שלח *כן* לאישור או *לא* לביטול."
+        response = "שלח *1* לאישור או *2* לביטול."
         send_message(phone, response)
         return response
 
@@ -746,15 +722,7 @@ def _handle_voice_confirm_flow(user_id, phone, text, flow_data):
 # ---------------------------------------------------------------------------
 
 def _format_tasks_list(tasks):
-    """
-    Format a list of task records for WhatsApp display.
-
-    Args:
-        tasks: Iterable of task dicts/rows with 'title', 'due_date', 'status'.
-
-    Returns:
-        str: Formatted message string.
-    """
+    """Format a list of task records for WhatsApp display."""
     if not tasks:
         return NO_TASKS
 

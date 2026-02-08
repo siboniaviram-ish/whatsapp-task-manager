@@ -30,7 +30,9 @@ VALID_FLOWS = {
     'meeting_contact',
     'meeting_time',
     'meeting_subject',
+    'meeting_location',
     'voice_confirm',
+    'voice_pending',
 }
 
 

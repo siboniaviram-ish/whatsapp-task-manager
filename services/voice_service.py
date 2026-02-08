@@ -29,8 +29,12 @@ def transcribe_audio(audio_url):
 
         import requests
 
-        # Download the audio file
-        audio_response = requests.get(audio_url, timeout=30)
+        # Download the audio file (Twilio media URLs require authentication)
+        twilio_sid = Config.TWILIO_ACCOUNT_SID
+        twilio_token = Config.TWILIO_AUTH_TOKEN
+        auth = (twilio_sid, twilio_token) if twilio_sid and twilio_token else None
+
+        audio_response = requests.get(audio_url, timeout=30, auth=auth)
         if audio_response.status_code != 200:
             print(f"[Voice Service] Failed to download audio: HTTP {audio_response.status_code}")
             return None

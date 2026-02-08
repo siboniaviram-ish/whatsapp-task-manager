@@ -136,25 +136,18 @@ def send_meeting_invite(to_number, meeting_data):
         title = meeting_data.get('title', 'Meeting')
         meeting_date = meeting_data.get('meeting_date', '')
         start_time = meeting_data.get('start_time', '')
-        end_time = meeting_data.get('end_time', '')
         location = meeting_data.get('location', '')
-        description = meeting_data.get('description', '')
 
-        time_range = start_time
-        if end_time:
-            time_range = f"{start_time} - {end_time}"
-
-        location_str = f"\nLocation: {location}" if location else ''
-        desc_str = f"\nDetails: {description}" if description else ''
+        location_str = f"\n📍 מיקום: {location}" if location else ''
 
         body = (
-            f"You're invited to a meeting:\n"
-            f"Title: {title}\n"
-            f"Date: {meeting_date}\n"
-            f"Time: {time_range}"
-            f"{location_str}"
-            f"{desc_str}\n"
-            f"\nReply 'accept', 'decline', or 'tentative'."
+            f"📅 הוזמנת לפגישה!\n\n"
+            f"📌 נושא: *{title}*\n"
+            f"🗓️ תאריך: {meeting_date}\n"
+            f"🕐 שעה: {start_time}"
+            f"{location_str}\n\n"
+            f"1️⃣ *מאשר*\n"
+            f"2️⃣ *לא יכול*"
         )
 
         return send_message(to_number, body)
