@@ -285,7 +285,7 @@ def _handle_voice_standalone(user_id, phone, media_url):
     try:
         transcript = transcribe_audio(media_url)
         if not transcript:
-            send_text(phone, "🎤 לא הצלחתי לזהות את ההודעה הקולית. נסה שוב.")
+            send_text(phone, "🎤 לא הצלחתי לזהות. אנא אמור שוב בקול ברור.")
             return
 
         task_info = extract_task_from_transcript(transcript)
@@ -305,7 +305,7 @@ def _handle_voice_in_flow(user_id, phone, media_url, flow_name, flow_data):
     try:
         transcript = transcribe_audio(media_url)
         if not transcript:
-            send_text(phone, "🎤 לא הצלחתי לזהות. נסה שוב.")
+            send_text(phone, "🎤 לא הצלחתי לזהות. אנא אמור שוב בקול ברור.")
             return
 
         flow_data['_pending_voice'] = transcript
@@ -414,14 +414,14 @@ def _handle_create_task(user_id, phone, text, action_id, flow_data):
             if parsed:
                 flow_data['due_date'] = parsed
                 return _finalize_task(user_id, phone, flow_data)
-            send_text(phone, "❌ לא הצלחתי לזהות תאריך.\nהקלד בפורמט: 25/03/2025")
+            send_text(phone, "❌ לא הצלחתי לזהות תאריך.\nהקלד לדוגמה: 25/3/25 או 25/03/2025 או 25.3")
             return
 
         resolved = _resolve_date(text, action_id)
         if resolved == 'custom':
             flow_data['awaiting_custom_date'] = True
             ConversationFlow.set_flow(user_id, 'create_task', flow_data)
-            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/03/2025):")
+            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/3/25 או 25/03/2025 או 25.3):")
             return
         if resolved:
             flow_data['due_date'] = resolved
@@ -497,14 +497,14 @@ def _handle_delegate(user_id, phone, text, action_id, flow_data):
             if parsed:
                 flow_data['due_date'] = parsed
                 return _finalize_delegation(user_id, phone, flow_data)
-            send_text(phone, "❌ תאריך לא תקין. הקלד בפורמט: 25/03/2025")
+            send_text(phone, "❌ תאריך לא תקין.\nהקלד לדוגמה: 25/3/25 או 25/03/2025 או 25.3")
             return
 
         resolved = _resolve_date(text, action_id)
         if resolved == 'custom':
             flow_data['awaiting_custom_date'] = True
             ConversationFlow.set_flow(user_id, 'delegate', flow_data)
-            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/03/2025):")
+            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/3/25 או 25/03/2025 או 25.3):")
             return
         if resolved:
             flow_data['due_date'] = resolved
@@ -595,14 +595,14 @@ def _handle_meeting(user_id, phone, text, action_id, flow_data):
                 ConversationFlow.set_flow(user_id, 'meeting', flow_data)
                 send_time_select(phone)
                 return
-            send_text(phone, "❌ תאריך לא תקין. הקלד בפורמט: 25/03/2025")
+            send_text(phone, "❌ תאריך לא תקין.\nהקלד לדוגמה: 25/3/25 או 25/03/2025 או 25.3")
             return
 
         resolved = _resolve_date(text, action_id)
         if resolved == 'custom':
             flow_data['awaiting_custom_date'] = True
             ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/03/2025):")
+            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/3/25 או 25/03/2025 או 25.3):")
             return
         if resolved:
             flow_data['date'] = resolved
@@ -864,16 +864,47 @@ def _resolve_location(text, action_id):
 
 def _parse_date_text(text):
     t = (text or '').strip()
-    if t.lower() in ('היום', 'today'):
+    if not t:
+        return None
+
+    low = t.lower()
+    if low in ('היום', 'today'):
         return date.today().isoformat()
-    if t.lower() in ('מחר', 'tomorrow'):
+    if low in ('מחר', 'tomorrow'):
         return (date.today() + timedelta(days=1)).isoformat()
 
+    # Try standard datetime formats (4-digit year with leading zeros)
     for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d.%m.%Y', '%d-%m-%Y'):
         try:
             return datetime.strptime(t, fmt).date().isoformat()
         except ValueError:
             continue
+
+    # Flexible regex: supports 1-2 digit day/month, 2 or 4 digit year
+    # Matches: 5/3/2025, 5.3.25, 05-03-25, 5/3/25, etc.
+    m = re.match(r'^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$', t)
+    if m:
+        day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        if year < 100:
+            year += 2000
+        try:
+            return date(year, month, day).isoformat()
+        except ValueError:
+            pass
+
+    # Day/month only (no year) → assume current year, or next year if date passed
+    m2 = re.match(r'^(\d{1,2})[/.\-](\d{1,2})$', t)
+    if m2:
+        day, month = int(m2.group(1)), int(m2.group(2))
+        today = date.today()
+        try:
+            d = date(today.year, month, day)
+            if d < today:
+                d = date(today.year + 1, month, day)
+            return d.isoformat()
+        except ValueError:
+            pass
+
     return None
 
 

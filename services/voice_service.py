@@ -20,12 +20,8 @@ def transcribe_audio(audio_url):
         api_key = Config.OPENAI_API_KEY
 
         if not api_key:
-            print("[Voice Service] OpenAI API key not configured. Returning mock transcription.")
-            return (
-                "This is a mock transcription. "
-                "Configure OPENAI_API_KEY for real speech-to-text. "
-                f"Audio URL: {audio_url}"
-            )
+            print("[Voice Service] OpenAI API key not configured.")
+            return None
 
         import requests
 
