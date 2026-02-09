@@ -60,6 +60,8 @@ def health_check():
         'twilio_sid_prefix': Config.TWILIO_ACCOUNT_SID[:6] + '...' if Config.TWILIO_ACCOUNT_SID else 'NOT SET',
         'whatsapp_number': Config.TWILIO_WHATSAPP_NUMBER or 'NOT SET',
         'openai_configured': bool(Config.OPENAI_API_KEY),
+        'openai_key_prefix': Config.OPENAI_API_KEY[:8] + '...' if Config.OPENAI_API_KEY else 'NOT SET',
+        'env_openai_raw': bool(os.environ.get('OPENAI_API_KEY')),
     })
 
 
