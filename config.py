@@ -10,7 +10,7 @@ class Config:
     # Twilio WhatsApp Configuration
     TWILIO_ACCOUNT_SID = os.environ.get('TWILIO_ACCOUNT_SID', '')
     TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_TOKEN', '')
-    TWILIO_WHATSAPP_NUMBER = os.environ.get('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+972535668060')
+    TWILIO_WHATSAPP_NUMBER = os.environ.get('TWILIO_WHATSAPP_NUMBER', 'whatsapp:+15557677574')
 
     # OpenAI (Whisper) for Speech-to-Text
     OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY', '')
