@@ -18,7 +18,7 @@ class Config:
     # App Settings
     DEFAULT_LANGUAGE = 'he'
     DEFAULT_TIMEZONE = 'Asia/Jerusalem'
-    APP_URL = os.environ.get('APP_URL', 'http://localhost:5000')
+    APP_URL = os.environ.get('APP_URL', 'https://whatsapp-task-manager.onrender.com')
 
     # Reminder Settings
     REMINDER_CHECK_INTERVAL = 60  # seconds
