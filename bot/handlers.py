@@ -545,7 +545,6 @@ def _finalize_task(user_id, phone, flow_data):
         f"📋 {DASHBOARD_URL}/tasks"
     )
     send_task_success(phone, msg)
-    send_main_menu(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -658,7 +657,6 @@ def _finalize_delegation(user_id, phone, flow_data):
         f"📋 {DASHBOARD_URL}/delegation"
     )
     send_delegate_success(phone, msg)
-    send_main_menu(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -860,7 +858,6 @@ def _finalize_meeting(user_id, phone, flow_data):
         f"📅 {DASHBOARD_URL}/calendar"
     )
     send_meeting_success(phone, msg)
-    send_main_menu(phone)
 
 
 # ---------------------------------------------------------------------------
