@@ -2,7 +2,7 @@ import os
 import json
 import sqlite3
 import logging
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 from flask_cors import CORS
 from database import get_db, init_db
@@ -55,7 +55,7 @@ def rows_to_list(rows):
 def health_check():
     return jsonify({
         'status': 'ok',
-        'version': '2.3',
+        'version': '3.0',
         'app_url': Config.APP_URL,
         'twilio_configured': bool(Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN),
         'twilio_sid_prefix': Config.TWILIO_ACCOUNT_SID[:6] + '...' if Config.TWILIO_ACCOUNT_SID else 'NOT SET',
@@ -601,9 +601,72 @@ def setup_scheduler():
                         except Exception:
                             pass
 
+        def send_weekly_summaries():
+            """Send weekly task/meeting summary to users who opted in (Sunday 08:00)."""
+            with app.app_context():
+                try:
+                    from services.whatsapp_service import send_message
+                    db = get_db()
+                    users = db.execute(
+                        "SELECT id, phone_number, name FROM users WHERE weekly_summary_enabled = 1"
+                    ).fetchall()
+
+                    for user in users:
+                        try:
+                            now_date = date.today()
+                            next_week = (now_date + timedelta(days=7)).isoformat()
+                            today_str = now_date.isoformat()
+
+                            tasks = db.execute(
+                                "SELECT title, due_date, due_time, priority, status FROM tasks "
+                                "WHERE user_id = ? AND status IN ('pending', 'in_progress') "
+                                "AND due_date BETWEEN ? AND ? ORDER BY due_date, due_time",
+                                (user['id'], today_str, next_week)
+                            ).fetchall()
+
+                            meetings = db.execute(
+                                "SELECT m.title, m.meeting_date, m.start_time, m.location FROM meetings m "
+                                "WHERE m.organizer_id = ? AND m.status = 'scheduled' "
+                                "AND m.meeting_date BETWEEN ? AND ? ORDER BY m.meeting_date, m.start_time",
+                                (user['id'], today_str, next_week)
+                            ).fetchall()
+
+                            if not tasks and not meetings:
+                                continue
+
+                            name = user['name'] or 'שלום'
+                            lines = [f"📋 *סיכום שבועי - {name}*\n"]
+
+                            if tasks:
+                                lines.append(f"📌 *{len(tasks)} משימות השבוע:*")
+                                for t in tasks[:10]:
+                                    time_str = f" {t['due_time']}" if t['due_time'] else ""
+                                    priority_icon = {'urgent': '🔴', 'high': '🟠', 'medium': '🟡', 'low': '🟢'}.get(t['priority'], '⚪')
+                                    lines.append(f"  {priority_icon} {t['title']} - {t['due_date']}{time_str}")
+                                if len(tasks) > 10:
+                                    lines.append(f"  ...ועוד {len(tasks) - 10} משימות")
+
+                            if meetings:
+                                lines.append(f"\n📅 *{len(meetings)} פגישות השבוע:*")
+                                for m in meetings[:5]:
+                                    loc = f" 📍{m['location']}" if m['location'] else ""
+                                    lines.append(f"  🕐 {m['title']} - {m['meeting_date']} {m['start_time']}{loc}")
+
+                            lines.append(f"\nשבוע פרודוקטיבי! 💪")
+
+                            send_message(user['phone_number'], "\n".join(lines))
+                            logger.info("Weekly summary sent to user %s", user['id'])
+                        except Exception as e:
+                            logger.error("Failed to send weekly summary to user %s: %s", user['id'], e)
+
+                    db.close()
+                except Exception as e:
+                    logger.error("Weekly summary job failed: %s", e)
+
         scheduler.add_job(check_reminders, 'interval', seconds=Config.REMINDER_CHECK_INTERVAL)
+        scheduler.add_job(send_weekly_summaries, 'cron', day_of_week='sun', hour=8, minute=0)
         scheduler.start()
-        logger.info("Reminder scheduler started")
+        logger.info("Reminder scheduler started (with weekly summary)")
     except Exception as e:
         logger.warning(f"Scheduler not started: {e}")
 

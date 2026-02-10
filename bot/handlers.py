@@ -1,7 +1,7 @@
 """
 WhatsApp Task Management Bot - Main Message Handlers
-Full interactive flow with buttons/lists via Twilio Content API.
-Voice input supported at every text-input step.
+Simplified flows: one message → smart parse → confirm → done.
+Voice input supported at every step.
 """
 
 import re
@@ -11,9 +11,10 @@ from datetime import date, datetime, timedelta
 from config import Config
 from database import get_db
 from services.task_service import create_task, get_tasks, complete_task, get_today_tasks
-from services.voice_service import transcribe_audio, extract_task_from_transcript
+from services.voice_service import transcribe_audio
+from services.smart_parse_service import parse_task_text, parse_meeting_text
 from services.meeting_service import create_meeting, add_participant
-from services.reminder_service import create_reminders_for_task
+from services.reminder_service import create_reminders_for_task, create_single_reminder
 from services.whatsapp_service import log_message
 from services.interactive_service import (
     send_text,
@@ -23,6 +24,10 @@ from services.interactive_service import (
     send_time_select,
     send_location_select,
     send_task_success,
+    send_task_confirm,
+    send_reminder_select,
+    send_delegate_ask,
+    send_date_fallback,
     send_meeting_confirm,
     send_meeting_success,
     send_delegate_success,
@@ -38,16 +43,28 @@ DASHBOARD_URL = Config.APP_URL
 
 # Map interactive button/list text → action id (fallback when payload missing)
 BUTTON_TEXT_MAP = {
-    # Main menu list items
-    '📝 משימה להיום': 'task_today',
-    '📅 משימה מתוזמנת': 'task_scheduled',
-    '👥 האצלת משימה': 'task_delegate',
-    '🤝 קביעת פגישה': 'schedule_meeting',
+    # New main menu (3 items)
+    '📝 משימה חדשה': 'new_task',
+    '🤝 קביעת פגישה': 'new_meeting',
     '📋 המשימות שלי': 'my_tasks',
+    # Legacy main menu items (for backward compat)
+    '📝 משימה להיום': 'new_task',
+    '📅 משימה מתוזמנת': 'new_task',
+    '👥 האצלת משימה': 'new_task',
+    # Task confirm
+    '✅ אשר': 'confirm_task',
+    '🔄 נסה שוב': 'retry_task',
+    # Reminder select
+    '⏰ שעה לפני': 'remind_1h',
+    '⏰ שעתיים לפני': 'remind_2h',
+    '⏰ יום לפני': 'remind_24h',
+    '🚫 בלי תזכורת': 'remind_none',
+    # Delegate ask
+    '👥 כן, להעביר': 'delegate_yes',
+    '⏭️ לא, סיימתי': 'delegate_no',
     # Voice confirm
-    '✅ אשר': 'confirm_voice',
     '🔄 שוב': 'retry_voice',
-    # Date select
+    # Date select / fallback
     '📆 היום': 'date_today',
     '📆 מחר': 'date_tomorrow',
     '📆 סוף השבוע': 'date_this_week',
@@ -62,7 +79,7 @@ BUTTON_TEXT_MAP = {
     # Success buttons
     '➕ משימה חדשה': 'new_task',
     '🏠 תפריט': 'main_menu',
-    '➕ פגישה חדשה': 'schedule_meeting',
+    '➕ פגישה חדשה': 'new_meeting',
     '📅 הפגישות שלי': 'my_meetings',
     # Meeting confirm
     '✅ אשר ושלח': 'confirm_meeting',
@@ -77,9 +94,7 @@ BUTTON_TEXT_MAP = {
     '❌ לא יכול': 'decline',
 }
 
-# Actions that take priority over active flows (from reminders, invites, navigation).
-# Without this, clicking a reminder button while in a flow would feed the button
-# text into the flow instead of handling the reminder action.
+# Actions that take priority over active flows
 PRIORITY_ACTIONS = {
     'task_done', 'snooze_30', 'snooze_60',
     'accept_delegation', 'decline_delegation',
@@ -107,14 +122,11 @@ def handle_incoming_message(from_number, message_body, message_type='text',
             logger.info("Processing voice message from %s, media_url=%s", from_number, media_url[:60] if media_url else '')
             flow_name, flow_data = ConversationFlow.get_flow(user_id)
             if flow_name == 'voice_pending':
-                # Re-record while confirming
                 return_flow = flow_data.get('_return_flow')
                 return _handle_voice_in_flow(user_id, from_number, media_url, return_flow, flow_data)
             elif flow_name == 'voice_confirm':
-                # Re-record standalone voice
                 return _handle_voice_standalone(user_id, from_number, media_url)
             elif flow_name:
-                # Voice input during active flow
                 return _handle_voice_in_flow(user_id, from_number, media_url, flow_name, flow_data)
             else:
                 return _handle_voice_standalone(user_id, from_number, media_url)
@@ -122,17 +134,15 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         # --- Contact shared (vCard) ---
         if message_type == 'contact' and message_body:
             flow_name, flow_data = ConversationFlow.get_flow(user_id)
-            if flow_name in ('delegate', 'meeting'):
-                # Route vCard content through the active flow as text
+            if flow_name in ('delegate_inline', 'delegate', 'meeting'):
                 text = message_body
                 action_id = _resolve_action_id(None, None, text)
                 return _handle_flow(user_id, from_number, text, action_id, flow_name, flow_data)
             else:
-                # Not in a relevant flow - show helpful message
                 vcard_phone, vcard_name = _parse_vcard(message_body)
                 if vcard_phone:
                     display = vcard_name or vcard_phone
-                    send_text(from_number, f"📱 קיבלתי את איש הקשר *{display}*.\nכדי להעביר משימה, בחר *האצלת משימה* מהתפריט:")
+                    send_text(from_number, f"📱 קיבלתי את איש הקשר *{display}*.\nכדי להעביר משימה, צור משימה חדשה ובחר להעביר:")
                 send_main_menu(from_number)
                 return
 
@@ -147,8 +157,7 @@ def handle_incoming_message(from_number, message_body, message_type='text',
             send_main_menu(from_number)
             return
 
-        # Priority actions (reminders, invites, menu) - must be handled
-        # even when an unrelated flow is active.
+        # Priority actions
         if action_id in PRIORITY_ACTIONS:
             if action_id == 'main_menu':
                 ConversationFlow.clear_flow(user_id)
@@ -159,8 +168,9 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         if flow_name:
             return _handle_flow(user_id, from_number, text, action_id, flow_name, flow_data)
 
-        # Global actions (from success buttons, reminders, invites)
-        if action_id in ('main_menu', 'my_tasks', 'new_task', 'my_meetings', 'schedule_meeting',
+        # Global actions
+        if action_id in ('main_menu', 'my_tasks', 'new_task', 'new_meeting',
+                         'my_meetings', 'schedule_meeting',
                          'task_done', 'snooze_30', 'snooze_60',
                          'accept_delegation', 'decline_delegation',
                          'accept_meeting', 'decline_meeting', 'decline'):
@@ -200,14 +210,16 @@ def _resolve_action_id(button_payload, list_id, text):
 
 def _action_to_command(action_id):
     mapping = {
-        'task_today': 'task_today',
-        'task_scheduled': 'task_scheduled',
-        'task_delegate': 'task_delegate',
-        'schedule_meeting': 'schedule_meeting',
+        'new_task': 'new_task',
+        'new_meeting': 'new_meeting',
         'my_tasks': 'my_tasks',
         'main_menu': 'welcome',
-        'new_task': 'new_task',
         'my_meetings': 'meetings',
+        # Legacy
+        'task_today': 'new_task',
+        'task_scheduled': 'new_task',
+        'task_delegate': 'new_task',
+        'schedule_meeting': 'new_meeting',
     }
     return mapping.get(action_id)
 
@@ -245,14 +257,14 @@ def _handle_global_action(user_id, phone, action_id):
         send_main_menu(phone)
     elif action_id == 'my_tasks':
         _show_tasks(user_id, phone)
-    elif action_id == 'new_task':
-        ConversationFlow.set_flow(user_id, 'create_task', {})
-        send_text(phone, "📝 מה המשימה? הקלד או הקלט הודעה קולית:")
+    elif action_id in ('new_task',):
+        ConversationFlow.set_flow(user_id, 'new_task', {})
+        send_text(phone, "📝 תאר את המשימה בהודעה אחת.\nלדוגמה: *להתקשר לרופא מחר ב-16:00*\n\nאפשר גם הודעה קולית 🎤")
+    elif action_id in ('new_meeting', 'schedule_meeting'):
+        ConversationFlow.set_flow(user_id, 'new_meeting', {})
+        send_text(phone, "📅 תאר את הפגישה בהודעה אחת.\nלדוגמה: *פגישה עם יוסי מחר ב-14:00 בזום*\n\nאפשר גם הודעה קולית 🎤")
     elif action_id == 'my_meetings':
         _show_meetings(user_id, phone)
-    elif action_id == 'schedule_meeting':
-        ConversationFlow.set_flow(user_id, 'meeting', {})
-        send_text(phone, "📌 מה נושא הפגישה? הקלד או הקלט:")
     elif action_id == 'task_done':
         _handle_task_done(user_id, phone)
     elif action_id in ('snooze_30', 'snooze_60'):
@@ -263,8 +275,6 @@ def _handle_global_action(user_id, phone, action_id):
     elif action_id == 'decline_delegation':
         _handle_delegation_response(user_id, phone, accepted=False)
     elif action_id == 'decline':
-        # Ambiguous text fallback ("❌ לא יכול" is used for both delegation
-        # and meeting invites) - check what the user actually has pending.
         db = None
         try:
             db = get_db()
@@ -296,24 +306,13 @@ def _handle_command(user_id, phone, command):
         if command == 'welcome':
             send_main_menu(phone)
 
-        elif command in ('new_task', 'task_today'):
-            data = {}
-            if command == 'task_today':
-                data = {'type': 'today', 'due_date': date.today().isoformat()}
-            ConversationFlow.set_flow(user_id, 'create_task', data)
-            send_text(phone, "📝 מה המשימה? הקלד או הקלט הודעה קולית:")
+        elif command == 'new_task':
+            ConversationFlow.set_flow(user_id, 'new_task', {})
+            send_text(phone, "📝 תאר את המשימה בהודעה אחת.\nלדוגמה: *להתקשר לרופא מחר ב-16:00*\n\nאפשר גם הודעה קולית 🎤")
 
-        elif command == 'task_scheduled':
-            ConversationFlow.set_flow(user_id, 'create_task', {'type': 'scheduled'})
-            send_text(phone, "📝 מה המשימה? הקלד או הקלט הודעה קולית:")
-
-        elif command == 'task_delegate':
-            ConversationFlow.set_flow(user_id, 'delegate', {})
-            send_text(phone, "📝 מה המשימה שתרצה להעביר? הקלד או הקלט:")
-
-        elif command == 'schedule_meeting':
-            ConversationFlow.set_flow(user_id, 'meeting', {})
-            send_text(phone, "📌 מה נושא הפגישה? הקלד או הקלט:")
+        elif command == 'new_meeting':
+            ConversationFlow.set_flow(user_id, 'new_meeting', {})
+            send_text(phone, "📅 תאר את הפגישה בהודעה אחת.\nלדוגמה: *פגישה עם יוסי מחר ב-14:00 בזום*\n\nאפשר גם הודעה קולית 🎤")
 
         elif command == 'my_tasks':
             _show_tasks(user_id, phone)
@@ -322,9 +321,11 @@ def _handle_command(user_id, phone, command):
             send_text(phone, (
                 "ℹ️ *עזרה*\n━━━━━━━━━━━\n\n"
                 "שלח *היי* או *תפריט* לתפריט הראשי.\n"
-                "שלח הודעה קולית בכל שלב ליצירת משימה.\n"
+                "שלח *משימה* ליצירת משימה חדשה.\n"
+                "שלח *פגישה* לקביעת פגישה.\n"
+                "שלח הודעה קולית בכל שלב.\n"
                 "שלח *ביטול* לביטול פעולה נוכחית.\n\n"
-                "💡 בכל שלב ניתן להקליד טקסט או לשלוח הודעה קולית."
+                "💡 תאר משימה או פגישה בהודעה אחת ואני אזהה הכל!"
             ))
 
         elif command == 'complete':
@@ -339,6 +340,15 @@ def _handle_command(user_id, phone, command):
         elif command == 'meetings':
             _show_meetings(user_id, phone)
 
+        # Legacy commands → redirect to new flows
+        elif command in ('task_today', 'task_scheduled', 'task_delegate'):
+            ConversationFlow.set_flow(user_id, 'new_task', {})
+            send_text(phone, "📝 תאר את המשימה בהודעה אחת.\nלדוגמה: *להתקשר לרופא מחר ב-16:00*\n\nאפשר גם הודעה קולית 🎤")
+
+        elif command == 'schedule_meeting':
+            ConversationFlow.set_flow(user_id, 'new_meeting', {})
+            send_text(phone, "📅 תאר את הפגישה בהודעה אחת.\nלדוגמה: *פגישה עם יוסי מחר ב-14:00 בזום*\n\nאפשר גם הודעה קולית 🎤")
+
         else:
             send_main_menu(phone)
 
@@ -352,20 +362,27 @@ def _handle_command(user_id, phone, command):
 # ---------------------------------------------------------------------------
 
 def _handle_voice_standalone(user_id, phone, media_url):
+    """Transcribe voice → smart parse → enter new_task at confirmation step."""
     try:
         transcript = transcribe_audio(media_url)
         if not transcript:
             send_text(phone, "🎤 לא הצלחתי לזהות. אנא אמור שוב בקול ברור.")
             return
 
-        task_info = extract_task_from_transcript(transcript)
+        # Smart parse the transcript
+        parsed = parse_task_text(transcript)
+
         flow_data = {
             'transcript': transcript,
-            'task_title': task_info.get('title', transcript) if isinstance(task_info, dict) else transcript,
-            'due_date': task_info.get('due_date', date.today().isoformat()) if isinstance(task_info, dict) else date.today().isoformat(),
+            'parsed': parsed,
+            'step': 'confirm',
+            'created_via': 'whatsapp_voice',
         }
-        ConversationFlow.set_flow(user_id, 'voice_confirm', flow_data)
-        send_voice_confirm(phone, transcript)
+        ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+
+        # Show confirmation
+        summary = _build_task_confirm_summary(parsed)
+        send_task_confirm(phone, summary)
     except Exception as e:
         logger.error("Voice error for user %s: %s", user_id, e, exc_info=True)
         send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
@@ -397,12 +414,19 @@ def _handle_flow(user_id, phone, text, action_id, flow_name, flow_data):
             return _handle_voice_pending(user_id, phone, text, action_id, flow_data)
         elif flow_name == 'voice_confirm':
             return _handle_voice_confirm(user_id, phone, text, action_id, flow_data)
+        elif flow_name == 'new_task':
+            return _handle_new_task(user_id, phone, text, action_id, flow_data)
+        elif flow_name == 'new_meeting':
+            return _handle_new_meeting(user_id, phone, text, action_id, flow_data)
+        elif flow_name == 'delegate_inline':
+            return _handle_delegate_inline(user_id, phone, text, action_id, flow_data)
+        # Legacy flows
         elif flow_name == 'create_task':
-            return _handle_create_task(user_id, phone, text, action_id, flow_data)
+            return _handle_create_task_legacy(user_id, phone, text, action_id, flow_data)
         elif flow_name == 'delegate':
-            return _handle_delegate(user_id, phone, text, action_id, flow_data)
+            return _handle_delegate_legacy(user_id, phone, text, action_id, flow_data)
         elif flow_name == 'meeting':
-            return _handle_meeting(user_id, phone, text, action_id, flow_data)
+            return _handle_meeting_legacy(user_id, phone, text, action_id, flow_data)
         else:
             ConversationFlow.clear_flow(user_id)
             send_main_menu(phone)
@@ -424,7 +448,7 @@ def _handle_flow(user_id, phone, text, action_id, flow_name, flow_data):
 # ---------------------------------------------------------------------------
 
 def _handle_voice_pending(user_id, phone, text, action_id, flow_data):
-    if action_id == 'confirm_voice' or text in ('1', 'כן', 'אשר'):
+    if action_id in ('confirm_voice', 'confirm_task') or text in ('1', 'כן', 'אשר'):
         transcript = flow_data.pop('_pending_voice', '')
         return_flow = flow_data.pop('_return_flow', None)
         if not return_flow:
@@ -434,7 +458,7 @@ def _handle_voice_pending(user_id, phone, text, action_id, flow_data):
         ConversationFlow.set_flow(user_id, return_flow, flow_data)
         return _handle_flow(user_id, phone, transcript, None, return_flow, flow_data)
 
-    elif action_id == 'retry_voice' or text in ('2', 'לא'):
+    elif action_id in ('retry_voice', 'retry_task') or text in ('2', 'לא'):
         flow_data.pop('_pending_voice', None)
         return_flow = flow_data.pop('_return_flow', None)
         if not return_flow:
@@ -449,18 +473,22 @@ def _handle_voice_pending(user_id, phone, text, action_id, flow_data):
 
 
 # ---------------------------------------------------------------------------
-# Voice confirm (standalone voice → task)
+# Voice confirm (standalone voice → task) - legacy compat
 # ---------------------------------------------------------------------------
 
 def _handle_voice_confirm(user_id, phone, text, action_id, flow_data):
-    if action_id == 'confirm_voice' or text in ('1', 'כן', 'אשר'):
-        task_data = {
-            'title': flow_data.get('task_title', flow_data.get('transcript', '')),
-            'type': 'today',
-            'due_date': flow_data.get('due_date', date.today().isoformat()),
-        }
-        return _finalize_task(user_id, phone, task_data)
-    elif action_id == 'retry_voice' or text in ('2', 'לא'):
+    if action_id in ('confirm_voice', 'confirm_task') or text in ('1', 'כן', 'אשר'):
+        # Use smart parse instead of old regex
+        transcript = flow_data.get('transcript', '')
+        parsed = parse_task_text(transcript)
+        flow_data['parsed'] = parsed
+        flow_data['step'] = 'confirm'
+        flow_data['created_via'] = 'whatsapp_voice'
+        ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+
+        summary = _build_task_confirm_summary(parsed)
+        send_task_confirm(phone, summary)
+    elif action_id in ('retry_voice', 'retry_task') or text in ('2', 'לא'):
         ConversationFlow.clear_flow(user_id)
         send_text(phone, "🎤 שלח הודעה קולית חדשה:")
     else:
@@ -468,57 +496,395 @@ def _handle_voice_confirm(user_id, phone, text, action_id, flow_data):
 
 
 # ---------------------------------------------------------------------------
-# Create Task flow
+# NEW: Simplified Task Flow
+# Step 1: User sends text/voice → smart parse → show confirmation
+# Step 2: User confirms → if no date, show date fallback; else show reminder
+# Step 3: User picks reminder → save task → ask about delegation
+# Step 4: User delegates or finishes
 # ---------------------------------------------------------------------------
 
-def _handle_create_task(user_id, phone, text, action_id, flow_data):
-    # Step 1: title
-    if 'title' not in flow_data:
-        flow_data['title'] = text
-        if flow_data.get('type') == 'today':
-            flow_data.setdefault('due_date', date.today().isoformat())
-            return _finalize_task(user_id, phone, flow_data)
-        # Scheduled task → ask for date
-        ConversationFlow.set_flow(user_id, 'create_task', flow_data)
-        send_date_select(phone)
+def _handle_new_task(user_id, phone, text, action_id, flow_data):
+    step = flow_data.get('step', 'input')
+
+    # Step 1: Input → smart parse → show confirmation
+    if step == 'input':
+        parsed = parse_task_text(text)
+        flow_data['parsed'] = parsed
+        flow_data['step'] = 'confirm'
+        flow_data.setdefault('created_via', 'whatsapp_text')
+        ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+
+        summary = _build_task_confirm_summary(parsed)
+        send_task_confirm(phone, summary)
         return
 
-    # Step 2: date
-    if 'due_date' not in flow_data:
+    # Step 2: Confirmation
+    if step == 'confirm':
+        if action_id == 'confirm_task' or text in ('1', 'כן', 'אשר', '✅ אשר'):
+            parsed = flow_data.get('parsed', {})
+            # If no date was detected, ask for one
+            if not parsed.get('due_date'):
+                flow_data['step'] = 'date_fallback'
+                ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+                send_date_fallback(phone)
+                return
+            # Date exists → go to reminder selection
+            flow_data['step'] = 'reminder'
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            send_reminder_select(phone)
+            return
+
+        elif action_id == 'retry_task' or text in ('2', 'לא', '🔄 נסה שוב'):
+            flow_data['step'] = 'input'
+            flow_data.pop('parsed', None)
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            send_text(phone, "📝 תאר את המשימה שוב:")
+            return
+
+        # Unrecognized
+        send_text(phone, "שלח *1* לאישור או *2* לנסות שוב.")
+        return
+
+    # Step 2b: Date fallback (when smart parse didn't detect a date)
+    if step == 'date_fallback':
         if flow_data.get('awaiting_custom_date'):
-            parsed = _parse_date_text(text)
-            if parsed:
-                flow_data['due_date'] = parsed
-                return _finalize_task(user_id, phone, flow_data)
+            parsed_date = _parse_date_text(text)
+            if parsed_date:
+                flow_data['parsed']['due_date'] = parsed_date
+                flow_data['step'] = 'reminder'
+                flow_data.pop('awaiting_custom_date', None)
+                ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+                send_reminder_select(phone)
+                return
             send_text(phone, "❌ לא הצלחתי לזהות תאריך.\nהקלד לדוגמה: 25/3/25 או 25/03/2025 או 25.3")
             return
 
         resolved = _resolve_date(text, action_id)
         if resolved == 'custom':
             flow_data['awaiting_custom_date'] = True
-            ConversationFlow.set_flow(user_id, 'create_task', flow_data)
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
             send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/3/25 או 25/03/2025 או 25.3):")
             return
         if resolved:
-            flow_data['due_date'] = resolved
-            return _finalize_task(user_id, phone, flow_data)
+            flow_data['parsed']['due_date'] = resolved
+            flow_data['step'] = 'reminder'
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            send_reminder_select(phone)
+            return
 
-        # Unrecognized → resend
-        send_date_select(phone)
+        send_date_fallback(phone)
+        return
+
+    # Step 3: Reminder selection
+    if step == 'reminder':
+        reminder_map = {
+            'remind_1h': 60,
+            'remind_2h': 120,
+            'remind_24h': 1440,
+            'remind_none': None,
+        }
+        # Check action_id first
+        minutes = None
+        selected = False
+        if action_id in reminder_map:
+            minutes = reminder_map[action_id]
+            selected = True
+        elif text in ('1',):
+            minutes = 60
+            selected = True
+        elif text in ('2',):
+            minutes = 120
+            selected = True
+        elif text in ('3',):
+            minutes = 1440
+            selected = True
+        elif text in ('4',):
+            minutes = None
+            selected = True
+
+        if selected:
+            # Save the task
+            parsed = flow_data.get('parsed', {})
+            task_id = _save_task(user_id, parsed, flow_data.get('created_via', 'whatsapp_text'))
+
+            # Create single reminder if requested
+            if task_id and minutes:
+                try:
+                    create_single_reminder(task_id, minutes)
+                except Exception as e:
+                    logger.warning("Failed to create reminder: %s", e)
+
+            # Store task_id for potential delegation
+            flow_data['task_id'] = task_id
+            flow_data['step'] = 'delegate_ask'
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+
+            # Show success + ask about delegation
+            display_date = _format_display_date(parsed.get('due_date'))
+            reminder_text = _reminder_text(minutes)
+            msg = (
+                f"✅ המשימה נשמרה!\n\n"
+                f"📌 *{parsed.get('title', '')}*\n"
+                f"📅 תאריך: {display_date}\n"
+                f"⏰ תזכורת: {reminder_text}\n\n"
+                f"📋 {DASHBOARD_URL}/tasks"
+            )
+            send_text(phone, msg)
+            send_delegate_ask(phone)
+            return
+
+        send_reminder_select(phone)
+        return
+
+    # Step 4: Delegation ask
+    if step == 'delegate_ask':
+        if action_id == 'delegate_yes' or text in ('1', 'כן'):
+            task_id = flow_data.get('task_id')
+            parsed = flow_data.get('parsed', {})
+            ConversationFlow.set_flow(user_id, 'delegate_inline', {
+                'task_id': task_id,
+                'task_title': parsed.get('title', ''),
+                'due_date': parsed.get('due_date', ''),
+            })
+            send_text(phone, "👤 שתף איש קשר מהטלפון 📱")
+            return
+
+        elif action_id == 'delegate_no' or text in ('2', 'לא', '⏭️ לא, סיימתי'):
+            ConversationFlow.clear_flow(user_id)
+            send_task_success(phone, "✅ סיימנו! המשימה נשמרה בהצלחה.")
+            return
+
+        send_delegate_ask(phone)
         return
 
 
-def _finalize_task(user_id, phone, flow_data):
+# ---------------------------------------------------------------------------
+# NEW: Inline Delegation (after task save)
+# ---------------------------------------------------------------------------
+
+def _handle_delegate_inline(user_id, phone, text, action_id, flow_data):
+    """Receive vCard contact → record delegation → send invite → done."""
+    vcard_phone, vcard_name = _parse_vcard(text)
+    if not vcard_phone:
+        send_text(phone, "📱 שתף איש קשר מהטלפון כדי להמשיך.\nלחץ על 📎 ובחר *איש קשר*.\n\nאו שלח *ביטול* לחזרה.")
+        return
+
+    task_id = flow_data.get('task_id')
+    task_title = flow_data.get('task_title', '')
+    due_date_str = flow_data.get('due_date', '')
+
+    # Record delegation in DB
+    if task_id:
+        db = None
+        try:
+            db = get_db()
+            db.execute(
+                "INSERT INTO delegated_tasks (task_id, delegator_id, assignee_phone, assignee_name, "
+                "status, message_sent_at) VALUES (?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP)",
+                (task_id, user_id, vcard_phone, vcard_name or vcard_phone),
+            )
+            db.execute("UPDATE tasks SET task_type = 'delegated' WHERE id = ?", (task_id,))
+            db.commit()
+        except Exception as e:
+            logger.warning("Failed to record delegation: %s", e)
+            if db:
+                db.rollback()
+        finally:
+            if db:
+                db.close()
+
+    # Send invite to assignee
+    display_date = _format_display_date(due_date_str)
+    display_assignee = vcard_name or vcard_phone
+    invite_msg = (
+        f"📥 קיבלת משימה חדשה!\n\n"
+        f"📌 משימה: *{task_title}*\n"
+        f"📅 תאריך יעד: {display_date}"
+    )
+    try:
+        send_delegation_invite(vcard_phone, invite_msg)
+    except Exception as e:
+        logger.warning("Failed to send delegation invite to %s: %s", vcard_phone, e)
+
+    ConversationFlow.clear_flow(user_id)
+
+    msg = (
+        f"✅ המשימה הועברה בהצלחה!\n\n"
+        f"👤 נשלח אל: *{display_assignee}*\n"
+        f"📌 משימה: *{task_title}*\n"
+        f"📅 תאריך יעד: {display_date}\n\n"
+        f"📋 {DASHBOARD_URL}/delegation"
+    )
+    send_delegate_success(phone, msg)
+
+
+# ---------------------------------------------------------------------------
+# NEW: Simplified Meeting Flow
+# Step 1: User sends text/voice → smart parse → show confirmation
+# Step 2: User confirms → save meeting → done
+# ---------------------------------------------------------------------------
+
+def _handle_new_meeting(user_id, phone, text, action_id, flow_data):
+    step = flow_data.get('step', 'input')
+
+    # Step 1: Input → smart parse → show confirmation
+    if step == 'input':
+        parsed = parse_meeting_text(text)
+        flow_data['parsed'] = parsed
+        flow_data['step'] = 'confirm'
+        ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+
+        summary = _build_meeting_confirm_summary(parsed)
+        send_meeting_confirm(phone, summary)
+        return
+
+    # Step 2: Confirmation
+    if step == 'confirm':
+        if action_id == 'confirm_meeting' or text in ('1', 'אשר', '✅ אשר ושלח'):
+            parsed = flow_data.get('parsed', {})
+
+            # If no date, ask for one
+            if not parsed.get('date'):
+                flow_data['step'] = 'date_fallback'
+                ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+                send_date_fallback(phone)
+                return
+
+            # If no time, ask for one
+            if not parsed.get('time'):
+                flow_data['step'] = 'time_select'
+                ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+                send_time_select(phone)
+                return
+
+            return _finalize_new_meeting(user_id, phone, flow_data)
+
+        elif action_id == 'cancel_flow' or text in ('2', 'בטל', '❌ בטל'):
+            ConversationFlow.clear_flow(user_id)
+            send_text(phone, "❌ הפגישה בוטלה.")
+            send_main_menu(phone)
+            return
+
+        send_meeting_confirm(phone, _build_meeting_confirm_summary(flow_data.get('parsed', {})))
+        return
+
+    # Date fallback for meeting
+    if step == 'date_fallback':
+        if flow_data.get('awaiting_custom_date'):
+            parsed_date = _parse_date_text(text)
+            if parsed_date:
+                flow_data['parsed']['date'] = parsed_date
+                flow_data.pop('awaiting_custom_date', None)
+                # Check if time is also missing
+                if not flow_data['parsed'].get('time'):
+                    flow_data['step'] = 'time_select'
+                    ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+                    send_time_select(phone)
+                    return
+                return _finalize_new_meeting(user_id, phone, flow_data)
+            send_text(phone, "❌ לא הצלחתי לזהות תאריך.\nהקלד לדוגמה: 25/3/25 או 25/03/2025 או 25.3")
+            return
+
+        resolved = _resolve_date(text, action_id)
+        if resolved == 'custom':
+            flow_data['awaiting_custom_date'] = True
+            ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/3/25 או 25/03/2025 או 25.3):")
+            return
+        if resolved:
+            flow_data['parsed']['date'] = resolved
+            if not flow_data['parsed'].get('time'):
+                flow_data['step'] = 'time_select'
+                ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+                send_time_select(phone)
+                return
+            return _finalize_new_meeting(user_id, phone, flow_data)
+
+        send_date_fallback(phone)
+        return
+
+    # Time select for meeting
+    if step == 'time_select':
+        time_val = _resolve_time(text, action_id)
+        if time_val:
+            flow_data['parsed']['time'] = time_val
+            return _finalize_new_meeting(user_id, phone, flow_data)
+        send_time_select(phone)
+        return
+
+
+def _finalize_new_meeting(user_id, phone, flow_data):
+    """Save the meeting and send success."""
+    parsed = flow_data.get('parsed', {})
+
+    try:
+        meeting_date = datetime.strptime(parsed.get('date', ''), '%Y-%m-%d').date()
+    except ValueError:
+        meeting_date = date.today()
+
+    meeting_data = {
+        'title': parsed.get('title', ''),
+        'meeting_date': meeting_date.isoformat(),
+        'start_time': parsed.get('time', ''),
+        'location': parsed.get('location', ''),
+    }
+    meeting_id = create_meeting(user_id, meeting_data)
+
+    display_date = meeting_date.strftime('%d/%m/%Y')
+    location = parsed.get('location', 'לא צוין') or 'לא צוין'
+    time_str = parsed.get('time', '')
+
+    # If GPT detected participant names, we log them but can't auto-invite
+    # (would need phone numbers). Show them in the success message.
+    participant_names = parsed.get('participants', [])
+
+    ConversationFlow.clear_flow(user_id)
+
+    parts_text = ''
+    if participant_names:
+        parts_text = f"\n👥 משתתפים: {', '.join(participant_names)}"
+
+    msg = (
+        f"✅ הפגישה נקבעה בהצלחה!\n\n"
+        f"📌 *{parsed.get('title', '')}*\n"
+        f"🗓️ תאריך: {display_date}\n"
+        f"🕐 שעה: {time_str}\n"
+        f"📍 מיקום: {location}"
+        f"{parts_text}\n\n"
+        f"📅 {DASHBOARD_URL}/calendar"
+    )
+    send_meeting_success(phone, msg)
+
+
+# ---------------------------------------------------------------------------
+# Legacy flows (for active sessions during deployment)
+# ---------------------------------------------------------------------------
+
+def _handle_create_task_legacy(user_id, phone, text, action_id, flow_data):
+    """Legacy create_task flow - redirect to new flow."""
+    # If user is mid-flow, complete it simply
+    if 'title' not in flow_data:
+        flow_data['title'] = text
+    if flow_data.get('type') == 'today':
+        flow_data.setdefault('due_date', date.today().isoformat())
+        return _finalize_task_legacy(user_id, phone, flow_data)
+    if 'due_date' not in flow_data:
+        resolved = _resolve_date(text, action_id)
+        if resolved and resolved != 'custom':
+            flow_data['due_date'] = resolved
+            return _finalize_task_legacy(user_id, phone, flow_data)
+        send_date_select(phone)
+        return
+    return _finalize_task_legacy(user_id, phone, flow_data)
+
+
+def _finalize_task_legacy(user_id, phone, flow_data):
     title = flow_data.get('title', '')
     due_date_str = flow_data.get('due_date', date.today().isoformat())
-
     try:
         due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
     except ValueError:
-        try:
-            due_date = datetime.strptime(due_date_str, '%d/%m/%Y').date()
-        except ValueError:
-            due_date = date.today()
+        due_date = date.today()
 
     task_type = 'today' if due_date == date.today() else 'scheduled'
     task_data = {
@@ -531,75 +897,44 @@ def _finalize_task(user_id, phone, flow_data):
     if task_id:
         try:
             create_reminders_for_task(task_id)
-        except Exception as e:
-            logger.warning("Failed to create reminders: %s", e)
+        except Exception:
+            pass
 
     ConversationFlow.clear_flow(user_id)
-
     display_date = due_date.strftime('%d/%m/%Y')
     msg = (
-        f"✅ המשימה נשמרה בהצלחה!\n\n"
+        f"✅ המשימה נשמרה!\n\n"
         f"📌 *{title}*\n"
-        f"📅 תאריך יעד: {display_date}\n"
-        f"⏰ תזכורת תישלח לפני מועד היעד.\n\n"
+        f"📅 תאריך יעד: {display_date}\n\n"
         f"📋 {DASHBOARD_URL}/tasks"
     )
     send_task_success(phone, msg)
 
 
-# ---------------------------------------------------------------------------
-# Delegation flow
-# ---------------------------------------------------------------------------
-
-def _handle_delegate(user_id, phone, text, action_id, flow_data):
-    # Step 1: task title
+def _handle_delegate_legacy(user_id, phone, text, action_id, flow_data):
+    """Legacy delegation flow."""
     if 'task_title' not in flow_data:
         flow_data['task_title'] = text
         ConversationFlow.set_flow(user_id, 'delegate', flow_data)
-        send_text(phone, "👤 למי להעביר?\nשתף איש קשר מהטלפון 📱")
+        send_text(phone, "👤 שתף איש קשר מהטלפון 📱")
         return
 
-    # Step 2: assignee (shared contact vCard only)
     if 'assignee' not in flow_data:
         vcard_phone, vcard_name = _parse_vcard(text)
         if vcard_phone:
             flow_data['assignee'] = vcard_phone
             if vcard_name:
                 flow_data['assignee_name'] = vcard_name
-            ConversationFlow.set_flow(user_id, 'delegate', flow_data)
-            send_date_select(phone)
-            return
-
-        # Not a contact - prompt again
-        send_text(phone, "📱 שתף איש קשר מהטלפון כדי להמשיך.\nלחץ על 📎 ובחר *איש קשר*.")
+            flow_data['due_date'] = date.today().isoformat()
+            return _finalize_delegation_legacy(user_id, phone, flow_data)
+        send_text(phone, "📱 שתף איש קשר מהטלפון.")
         return
 
-    # Step 3: due date
-    if 'due_date' not in flow_data:
-        if flow_data.get('awaiting_custom_date'):
-            parsed = _parse_date_text(text)
-            if parsed:
-                flow_data['due_date'] = parsed
-                return _finalize_delegation(user_id, phone, flow_data)
-            send_text(phone, "❌ תאריך לא תקין.\nהקלד לדוגמה: 25/3/25 או 25/03/2025 או 25.3")
-            return
-
-        resolved = _resolve_date(text, action_id)
-        if resolved == 'custom':
-            flow_data['awaiting_custom_date'] = True
-            ConversationFlow.set_flow(user_id, 'delegate', flow_data)
-            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/3/25 או 25/03/2025 או 25.3):")
-            return
-        if resolved:
-            flow_data['due_date'] = resolved
-            return _finalize_delegation(user_id, phone, flow_data)
-
-        send_date_select(phone)
-        return
+    return _finalize_delegation_legacy(user_id, phone, flow_data)
 
 
-def _finalize_delegation(user_id, phone, flow_data):
-    due_date_str = flow_data['due_date']
+def _finalize_delegation_legacy(user_id, phone, flow_data):
+    due_date_str = flow_data.get('due_date', date.today().isoformat())
     try:
         due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
     except ValueError:
@@ -625,195 +960,57 @@ def _finalize_delegation(user_id, phone, flow_data):
                 (task_id, user_id, assignee, assignee_name or assignee),
             )
             db.commit()
-        except Exception as e:
-            logger.warning("Failed to record delegation: %s", e)
+        except Exception:
             if db:
                 db.rollback()
         finally:
             if db:
                 db.close()
 
+    ConversationFlow.clear_flow(user_id)
     display_date = due_date.strftime('%d/%m/%Y')
     display_assignee = assignee_name or assignee
-
-    # Send invite to assignee
-    invite_msg = (
-        f"📥 קיבלת משימה חדשה!\n\n"
-        f"📌 משימה: *{flow_data['task_title']}*\n"
-        f"📅 תאריך יעד: {display_date}"
-    )
-    try:
-        send_delegation_invite(assignee, invite_msg)
-    except Exception as e:
-        logger.warning("Failed to send delegation invite to %s: %s", assignee, e)
-
-    ConversationFlow.clear_flow(user_id)
-
     msg = (
-        f"✅ המשימה הועברה בהצלחה!\n\n"
+        f"✅ המשימה הועברה!\n\n"
         f"👤 נשלח אל: *{display_assignee}*\n"
-        f"📌 משימה: *{flow_data['task_title']}*\n"
-        f"📅 תאריך יעד: {display_date}\n\n"
+        f"📌 *{flow_data['task_title']}*\n"
+        f"📅 {display_date}\n\n"
         f"📋 {DASHBOARD_URL}/delegation"
     )
     send_delegate_success(phone, msg)
 
 
-# ---------------------------------------------------------------------------
-# Meeting flow
-# ---------------------------------------------------------------------------
-
-def _handle_meeting(user_id, phone, text, action_id, flow_data):
-    # Step 1: subject
+def _handle_meeting_legacy(user_id, phone, text, action_id, flow_data):
+    """Legacy meeting flow - simplified."""
     if 'title' not in flow_data:
         flow_data['title'] = text
         ConversationFlow.set_flow(user_id, 'meeting', flow_data)
         send_date_select(phone)
         return
-
-    # Step 2: date
     if 'date' not in flow_data:
-        if flow_data.get('awaiting_custom_date'):
-            parsed = _parse_date_text(text)
-            if parsed:
-                flow_data['date'] = parsed
-                flow_data.pop('awaiting_custom_date', None)
-                ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-                send_time_select(phone)
-                return
-            send_text(phone, "❌ תאריך לא תקין.\nהקלד לדוגמה: 25/3/25 או 25/03/2025 או 25.3")
-            return
-
         resolved = _resolve_date(text, action_id)
-        if resolved == 'custom':
-            flow_data['awaiting_custom_date'] = True
-            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_text(phone, "📅 הקלד תאריך (לדוגמה: 25/3/25 או 25/03/2025 או 25.3):")
-            return
-        if resolved:
+        if resolved and resolved != 'custom':
             flow_data['date'] = resolved
             ConversationFlow.set_flow(user_id, 'meeting', flow_data)
             send_time_select(phone)
             return
-
         send_date_select(phone)
         return
-
-    # Step 3: time
     if 'time' not in flow_data:
         time_val = _resolve_time(text, action_id)
         if time_val:
             flow_data['time'] = time_val
-            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_text(phone, "👥 מי המשתתפים?\nשלח מספרי טלפון מופרדים בפסיקים\nאו שתף אנשי קשר מהטלפון 📱")
-            return
+            flow_data['location'] = ''
+            flow_data['participants'] = []
+            return _finalize_meeting_legacy(user_id, phone, flow_data)
         send_time_select(phone)
         return
-
-    # Step 4: participants (phone numbers or shared vCard contact)
-    if 'participants' not in flow_data:
-        # Try vCard first (shared contact)
-        vcard_phone, _ = _parse_vcard(text)
-        if vcard_phone:
-            existing = flow_data.get('_collecting_participants', [])
-            existing.append(vcard_phone)
-            flow_data['_collecting_participants'] = existing
-            send_text(phone, f"✅ נוסף: {vcard_phone}\nשתף עוד איש קשר, שלח מספרים בפסיקים, או שלח *סיום* לסיום:")
-            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            return
-
-        # Check for "done" to finalize participant collection
-        if text.strip() in ('סיום', 'done', 'סיים') and flow_data.get('_collecting_participants'):
-            flow_data['participants'] = flow_data.pop('_collecting_participants')
-            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_location_select(phone)
-            return
-
-        # Try comma-separated phone numbers
-        raw_parts = [p.strip() for p in text.split(',') if p.strip()]
-        normalized_parts = []
-        invalid = []
-        for p in raw_parts:
-            n = _normalize_phone(p)
-            if n:
-                normalized_parts.append(n)
-            else:
-                invalid.append(p)
-        if invalid:
-            send_text(phone, f"❌ מספרים לא תקינים: {', '.join(invalid)}\nשלח מספרי טלפון מופרדים בפסיקים\nאו שתף איש קשר מהטלפון 📱")
-            return
-
-        # Merge with any previously collected contacts
-        existing = flow_data.get('_collecting_participants', [])
-        normalized_parts = existing + normalized_parts
-
-        if normalized_parts:
-            flow_data.pop('_collecting_participants', None)
-            flow_data['participants'] = normalized_parts
-            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_location_select(phone)
-            return
-        send_text(phone, "👥 שלח לפחות מספר טלפון אחד\nאו שתף איש קשר מהטלפון 📱:")
-        return
-
-    # Step 5: location
-    if 'location' not in flow_data:
-        if flow_data.get('awaiting_custom_location'):
-            flow_data['location'] = text.strip()
-            flow_data.pop('awaiting_custom_location', None)
-            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_meeting_confirm(phone, _build_meeting_summary(flow_data))
-            return
-
-        loc = _resolve_location(text, action_id)
-        if loc == '__custom__':
-            flow_data['awaiting_custom_location'] = True
-            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_text(phone, "📍 הקלד את המיקום:")
-            return
-        if loc is not None:
-            flow_data['location'] = loc
-            ConversationFlow.set_flow(user_id, 'meeting', flow_data)
-            send_meeting_confirm(phone, _build_meeting_summary(flow_data))
-            return
-
-        send_location_select(phone)
-        return
-
-    # Step 6: confirmation
     if action_id == 'confirm_meeting' or text in ('1', 'אשר'):
-        return _finalize_meeting(user_id, phone, flow_data)
-    elif action_id == 'cancel_flow' or text in ('2', 'בטל'):
-        ConversationFlow.clear_flow(user_id)
-        send_text(phone, "❌ הפגישה בוטלה.")
-        send_main_menu(phone)
-    else:
-        send_meeting_confirm(phone, _build_meeting_summary(flow_data))
+        return _finalize_meeting_legacy(user_id, phone, flow_data)
+    send_main_menu(phone)
 
 
-def _build_meeting_summary(flow_data):
-    try:
-        d = datetime.strptime(flow_data['date'], '%Y-%m-%d').date()
-        display_date = d.strftime('%d/%m/%Y')
-    except (ValueError, KeyError):
-        display_date = flow_data.get('date', '')
-
-    parts = flow_data.get('participants', [])
-    loc = flow_data.get('location', 'לא צוין')
-    if not loc:
-        loc = 'לא צוין'
-
-    return (
-        f"📋 *סיכום פגישה:*\n\n"
-        f"📌 נושא: *{flow_data.get('title', '')}*\n"
-        f"🗓️ תאריך: {display_date}\n"
-        f"🕐 שעה: {flow_data.get('time', '')}\n"
-        f"📍 מיקום: {loc}\n"
-        f"👥 משתתפים: {', '.join(parts)}"
-    )
-
-
-def _finalize_meeting(user_id, phone, flow_data):
+def _finalize_meeting_legacy(user_id, phone, flow_data):
     try:
         meeting_date = datetime.strptime(flow_data['date'], '%Y-%m-%d').date()
     except ValueError:
@@ -822,39 +1019,18 @@ def _finalize_meeting(user_id, phone, flow_data):
     meeting_data = {
         'title': flow_data['title'],
         'meeting_date': meeting_date.isoformat(),
-        'start_time': flow_data['time'],
+        'start_time': flow_data.get('time', ''),
         'location': flow_data.get('location', ''),
     }
-    meeting_id = create_meeting(user_id, meeting_data)
-
-    display_date = meeting_date.strftime('%d/%m/%Y')
-    participants = flow_data.get('participants', [])
-    location = flow_data.get('location', 'לא צוין') or 'לא צוין'
-
-    for participant in participants:
-        try:
-            if meeting_id:
-                add_participant(meeting_id, participant, participant)
-            invite_msg = (
-                f"📅 הוזמנת לפגישה!\n\n"
-                f"📌 נושא: *{flow_data['title']}*\n"
-                f"🗓️ תאריך: {display_date}\n"
-                f"🕐 שעה: {flow_data['time']}\n"
-                f"📍 מיקום: {location}"
-            )
-            send_meeting_invite_interactive(participant, invite_msg)
-        except Exception as e:
-            logger.warning("Failed to invite %s: %s", participant, e)
+    create_meeting(user_id, meeting_data)
 
     ConversationFlow.clear_flow(user_id)
-
+    display_date = meeting_date.strftime('%d/%m/%Y')
     msg = (
-        f"✅ הפגישה נקבעה בהצלחה!\n\n"
+        f"✅ הפגישה נקבעה!\n\n"
         f"📌 *{flow_data['title']}*\n"
-        f"🗓️ תאריך: {display_date}\n"
-        f"🕐 שעה: {flow_data['time']}\n"
-        f"📍 מיקום: {location}\n"
-        f"👥 הזמנות נשלחו ל-{len(participants)} משתתפים ✉️\n\n"
+        f"🗓️ {display_date}\n"
+        f"🕐 {flow_data.get('time', '')}\n\n"
         f"📅 {DASHBOARD_URL}/calendar"
     )
     send_meeting_success(phone, msg)
@@ -865,7 +1041,6 @@ def _finalize_meeting(user_id, phone, flow_data):
 # ---------------------------------------------------------------------------
 
 def _handle_task_done(user_id, phone):
-    """Mark the user's most recent pending task as completed (from reminder button)."""
     db = None
     try:
         db = get_db()
@@ -889,8 +1064,6 @@ def _handle_task_done(user_id, phone):
 
 
 def _handle_snooze(user_id, phone, minutes):
-    """Snooze: create a new reminder N minutes from now for the user's most recent task."""
-    from services.reminder_service import create_reminders_for_task
     db = None
     try:
         db = get_db()
@@ -919,7 +1092,6 @@ def _handle_snooze(user_id, phone, minutes):
 
 
 def _handle_delegation_response(user_id, phone, accepted):
-    """Handle accept/decline of a delegated task (from the assignee's side)."""
     db = None
     try:
         db = get_db()
@@ -947,7 +1119,6 @@ def _handle_delegation_response(user_id, phone, accepted):
         else:
             send_text(phone, f"❌ דחית את המשימה \"{delegation['title']}\".")
 
-        # Notify the delegator
         delegator = db.execute(
             "SELECT phone_number FROM users WHERE id = ?",
             (delegation['delegator_id'],),
@@ -968,7 +1139,6 @@ def _handle_delegation_response(user_id, phone, accepted):
 
 
 def _handle_meeting_response(user_id, phone, accepted):
-    """Handle accept/decline of a meeting invite (from the participant's side)."""
     from services.meeting_service import respond_to_meeting
     db = None
     try:
@@ -993,7 +1163,6 @@ def _handle_meeting_response(user_id, phone, accepted):
         else:
             send_text(phone, f"❌ דחית את הפגישה \"{participant['title']}\".")
 
-        # Notify the organizer
         organizer = db.execute(
             "SELECT phone_number FROM users WHERE id = ?",
             (participant['organizer_id'],),
@@ -1065,6 +1234,85 @@ def _show_meetings(user_id, phone):
 
 
 # ---------------------------------------------------------------------------
+# Task save helper
+# ---------------------------------------------------------------------------
+
+def _save_task(user_id, parsed, created_via='whatsapp_text'):
+    """Save a task from parsed data and return the task_id."""
+    title = parsed.get('title', '')
+    due_date_str = parsed.get('due_date', date.today().isoformat())
+
+    try:
+        due_date = datetime.strptime(due_date_str, '%Y-%m-%d').date()
+    except (ValueError, TypeError):
+        due_date = date.today()
+
+    task_type = 'today' if due_date == date.today() else 'scheduled'
+    due_time = parsed.get('due_time')
+    priority = parsed.get('priority', 'medium')
+
+    task_data = {
+        'title': title,
+        'task_type': task_type,
+        'due_date': due_date.isoformat(),
+        'due_time': due_time,
+        'priority': priority,
+        'created_via': created_via,
+    }
+    return create_task(user_id, task_data)
+
+
+# ---------------------------------------------------------------------------
+# Summary builders
+# ---------------------------------------------------------------------------
+
+def _build_task_confirm_summary(parsed):
+    """Build a confirmation summary string from parsed task data."""
+    title = parsed.get('title', '')
+    due_date = _format_display_date(parsed.get('due_date'))
+    due_time = parsed.get('due_time', '')
+    priority = parsed.get('priority', 'medium')
+
+    priority_labels = {'low': '🟢 נמוכה', 'medium': '🟡 רגילה', 'high': '🟠 גבוהה', 'urgent': '🔴 דחוף'}
+    priority_text = priority_labels.get(priority, '🟡 רגילה')
+
+    time_str = f"\n🕐 שעה: {due_time}" if due_time else ''
+    assignee = parsed.get('assignee_name')
+    assignee_str = f"\n👤 להעביר: {assignee}" if assignee else ''
+
+    return (
+        f"📋 *זיהיתי:*\n\n"
+        f"📌 *{title}*\n"
+        f"📅 תאריך: {due_date}"
+        f"{time_str}\n"
+        f"⚡ עדיפות: {priority_text}"
+        f"{assignee_str}\n\n"
+        f"הכל נכון?"
+    )
+
+
+def _build_meeting_confirm_summary(parsed):
+    """Build a confirmation summary for a meeting."""
+    title = parsed.get('title', '')
+    meeting_date = _format_display_date(parsed.get('date'))
+    time_str = parsed.get('time', 'לא צוין')
+    location = parsed.get('location', 'לא צוין') or 'לא צוין'
+    participants = parsed.get('participants', [])
+
+    parts_str = f"\n👥 משתתפים: {', '.join(participants)}" if participants else ''
+
+    return (
+        f"📋 *זיהיתי פגישה:*\n\n"
+        f"📌 נושא: *{title}*\n"
+        f"🗓️ תאריך: {meeting_date}\n"
+        f"🕐 שעה: {time_str}\n"
+        f"📍 מיקום: {location}"
+        f"{parts_str}\n\n"
+        f"לאשר?"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Date / time / location resolvers
 # ---------------------------------------------------------------------------
 
@@ -1085,7 +1333,6 @@ def _resolve_date(text, action_id):
     if aid == 'date_custom' or t in ('4', 'תאריך אחר', '✏️ תאריך אחר'):
         return 'custom'
 
-    # Try parsing as a date directly
     parsed = _parse_date_text(t)
     if parsed:
         return parsed
@@ -1137,11 +1384,6 @@ def _resolve_location(text, action_id):
 
 
 def _parse_vcard(text):
-    """Extract phone number and name from a vCard string shared via WhatsApp.
-
-    Returns:
-        tuple: (phone, name) or (None, None) if not a vCard or no phone found.
-    """
     if not text or 'BEGIN:VCARD' not in text:
         return None, None
 
@@ -1150,13 +1392,9 @@ def _parse_vcard(text):
 
     for line in text.splitlines():
         line = line.strip()
-        # Extract name from FN (Full Name)
         if line.upper().startswith('FN:'):
             name = line[3:].strip()
-        # Extract phone from TEL line
-        # Formats: TEL:+972..., TEL;type=CELL:+972..., TEL;type=CELL;waid=972...:+972...
         elif line.upper().startswith('TEL'):
-            # The phone number is after the last colon
             colon_idx = line.rfind(':')
             if colon_idx != -1:
                 raw_phone = line[colon_idx + 1:].strip()
@@ -1167,10 +1405,8 @@ def _parse_vcard(text):
 
 
 def _normalize_phone(text):
-    """Normalize an Israeli phone number to international format (+972...)."""
     if not text:
         return None
-    # Strip non-digit chars except leading +
     cleaned = text.strip()
     if cleaned.startswith('+'):
         digits = '+' + re.sub(r'[^\d]', '', cleaned[1:])
@@ -1180,19 +1416,15 @@ def _normalize_phone(text):
     if not digits:
         return None
 
-    # Already international format
     if digits.startswith('+972') and len(digits) >= 13:
         return digits
     if digits.startswith('972') and len(digits) >= 12:
         return '+' + digits
-    # Israeli local: 05xxxxxxxx
     if digits.startswith('0') and len(digits) == 10:
         return '+972' + digits[1:]
-    # Just digits without 0 prefix: 5xxxxxxxx
     if len(digits) == 9 and digits.startswith('5'):
         return '+972' + digits
 
-    # If it has enough digits, assume it's valid
     if len(digits) >= 10:
         if not digits.startswith('+'):
             return '+' + digits
@@ -1212,15 +1444,12 @@ def _parse_date_text(text):
     if low in ('מחר', 'tomorrow'):
         return (date.today() + timedelta(days=1)).isoformat()
 
-    # Try standard datetime formats (4-digit year with leading zeros)
     for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d.%m.%Y', '%d-%m-%Y'):
         try:
             return datetime.strptime(t, fmt).date().isoformat()
         except ValueError:
             continue
 
-    # Flexible regex: supports 1-2 digit day/month, 2 or 4 digit year
-    # Matches: 5/3/2025, 5.3.25, 05-03-25, 5/3/25, etc.
     m = re.match(r'^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$', t)
     if m:
         day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -1231,7 +1460,6 @@ def _parse_date_text(text):
         except ValueError:
             pass
 
-    # Day/month only (no year) → assume current year, or next year if date passed
     m2 = re.match(r'^(\d{1,2})[/.\-](\d{1,2})$', t)
     if m2:
         day, month = int(m2.group(1)), int(m2.group(2))
@@ -1247,8 +1475,39 @@ def _parse_date_text(text):
     return None
 
 
+def _format_display_date(date_str):
+    """Format a YYYY-MM-DD string to DD/MM/YYYY for display."""
+    if not date_str:
+        return 'לא צוין'
+    try:
+        d = datetime.strptime(date_str, '%Y-%m-%d').date()
+        return d.strftime('%d/%m/%Y')
+    except ValueError:
+        return date_str
+
+
+def _reminder_text(minutes):
+    """Human-readable reminder text."""
+    if minutes is None:
+        return 'ללא תזכורת'
+    if minutes >= 1440:
+        return 'יום לפני'
+    if minutes >= 120:
+        return 'שעתיים לפני'
+    if minutes >= 60:
+        return 'שעה לפני'
+    return f'{minutes} דקות לפני'
+
+
 def _get_flow_prompt(flow_name, flow_data):
-    if flow_name == 'create_task':
+    if flow_name == 'new_task':
+        return "📝 תאר את המשימה בהודעה אחת:"
+    elif flow_name == 'new_meeting':
+        return "📅 תאר את הפגישה בהודעה אחת:"
+    elif flow_name == 'delegate_inline':
+        return "👤 שתף איש קשר מהטלפון 📱"
+    # Legacy
+    elif flow_name == 'create_task':
         if 'title' not in flow_data:
             return "📝 מה המשימה?"
         return "📅 לאיזה תאריך?"
@@ -1265,7 +1524,5 @@ def _get_flow_prompt(flow_name, flow_data):
             return "📅 באיזה תאריך?"
         if 'time' not in flow_data:
             return "🕐 באיזו שעה?"
-        if 'participants' not in flow_data:
-            return "👥 מי המשתתפים?"
-        return "📍 היכן הפגישה?"
+        return "📍 היכן?"
     return "📝 מה תרצה לעשות?"

@@ -144,6 +144,19 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_meeting_task ON meetings(task_id);
     ''')
 
+    # Migrations: add new columns (safe to re-run)
+    migrations = [
+        "ALTER TABLE tasks ADD COLUMN reminder_before INTEGER",
+        "ALTER TABLE users ADD COLUMN weekly_summary_enabled INTEGER DEFAULT 1",
+        "ALTER TABLE users ADD COLUMN weekly_summary_day INTEGER DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN weekly_summary_time TEXT DEFAULT '08:00'",
+    ]
+    for sql in migrations:
+        try:
+            cursor.execute(sql)
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+
     conn.commit()
     conn.close()
 

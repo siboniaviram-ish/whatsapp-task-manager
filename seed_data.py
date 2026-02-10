@@ -57,8 +57,8 @@ def seed():
         created = (now - timedelta(days=days_ago)).isoformat()
         last_active = (now - timedelta(hours=random.randint(0, 72))).isoformat()
         cursor.execute(
-            'INSERT INTO users (phone_number, name, email, whatsapp_verified, language, timezone, created_at, last_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            (phone, name, email, verified, lang, tz, created, last_active)
+            'INSERT INTO users (phone_number, name, email, whatsapp_verified, language, timezone, created_at, last_active, weekly_summary_enabled, weekly_summary_day, weekly_summary_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (phone, name, email, verified, lang, tz, created, last_active, 1, 0, '08:00')
         )
 
     # ============ TASKS (120+) ============
@@ -149,12 +149,14 @@ def seed():
         if created_via == 'whatsapp_voice':
             voice_transcript = description
 
+        reminder_before = random.choice([60, 120, 1440, None, None])
+
         cursor.execute(
             '''INSERT INTO tasks (user_id, title, description, task_type, status, priority, category,
-               due_date, due_time, created_via, voice_transcript, created_at, completed_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+               due_date, due_time, created_via, voice_transcript, created_at, completed_at, updated_at, reminder_before)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
             (user_id, title, description, task_type, status, priority, category,
-             due_date, due_time, created_via, voice_transcript, created_at, completed_at, now.isoformat())
+             due_date, due_time, created_via, voice_transcript, created_at, completed_at, now.isoformat(), reminder_before)
         )
 
     # ============ DELEGATED TASKS (20) ============

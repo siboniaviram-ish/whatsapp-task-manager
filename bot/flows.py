@@ -3,11 +3,15 @@ WhatsApp Task Management Bot - Conversation Flow State Machine
 Manages multi-step conversation flows using the 'conversations' table in the database.
 
 Flow names:
-    - 'create_task'     : Task creation (title → date → done)
-    - 'delegate'        : Task delegation (title → contact → date → done)
-    - 'meeting'         : Meeting scheduling (title → date → time → participants → location → confirm)
-    - 'voice_pending'   : Confirming voice transcription within an active flow
-    - 'voice_confirm'   : Standalone voice → task confirmation
+    - 'new_task'          : Simplified task creation (input → confirm → reminder → delegate?)
+    - 'new_meeting'       : Simplified meeting creation (input → confirm → done)
+    - 'delegate_inline'   : Inline delegation after task save (contact → done)
+    - 'voice_pending'     : Confirming voice transcription within an active flow
+    - 'voice_confirm'     : Standalone voice → task confirmation
+    Legacy (kept for backward compatibility):
+    - 'create_task'       : Old task creation flow
+    - 'delegate'          : Old delegation flow
+    - 'meeting'           : Old meeting flow
 """
 
 import json
@@ -16,11 +20,15 @@ from database import get_db
 
 # All recognized flow names
 VALID_FLOWS = {
+    'new_task',
+    'new_meeting',
+    'delegate_inline',
+    'voice_pending',
+    'voice_confirm',
+    # Legacy flows
     'create_task',
     'delegate',
     'meeting',
-    'voice_pending',
-    'voice_confirm',
 }
 
 

@@ -6,6 +6,9 @@ Maps Hebrew and English text commands (and menu selections) to internal command 
 # Hebrew text commands -> internal command names
 HEBREW_COMMANDS = {
     'משימה חדשה': 'new_task',
+    'משימה': 'new_task',
+    'פגישה חדשה': 'new_meeting',
+    'פגישה': 'new_meeting',
     'המשימות שלי': 'my_tasks',
     'עזרה': 'help',
     'היי': 'welcome',
@@ -19,6 +22,7 @@ HEBREW_COMMANDS = {
 # English text commands -> internal command names
 ENGLISH_COMMANDS = {
     'new task': 'new_task',
+    'new meeting': 'new_meeting',
     'my tasks': 'my_tasks',
     'help': 'help',
     'hi': 'welcome',
@@ -28,11 +32,9 @@ ENGLISH_COMMANDS = {
 
 # Numeric menu selections -> internal command names
 MENU_SELECTIONS = {
-    '1': 'task_today',
-    '2': 'task_scheduled',
-    '3': 'task_delegate',
-    '4': 'schedule_meeting',
-    '5': 'my_tasks',
+    '1': 'new_task',
+    '2': 'new_meeting',
+    '3': 'my_tasks',
 }
 
 # Confirmation responses used in flows

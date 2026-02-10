@@ -69,6 +69,62 @@ def create_reminders_for_task(task_id):
         return []
 
 
+def create_single_reminder(task_id, minutes_before):
+    """Create exactly one reminder for a task at the given offset.
+
+    Args:
+        task_id: The task's ID.
+        minutes_before: Minutes before due time (60, 120, 1440) or None for no reminder.
+
+    Returns:
+        Reminder ID on success, None on failure or if minutes_before is None/0.
+    """
+    if not minutes_before:
+        return None
+    try:
+        db = get_db()
+        task = db.execute(
+            "SELECT id, user_id, due_date, due_time FROM tasks WHERE id = ?",
+            (task_id,)
+        ).fetchone()
+
+        if not task or not task['due_date']:
+            db.close()
+            return None
+
+        due_time_str = task['due_time'] if task['due_time'] else '09:00'
+        due_datetime = datetime.strptime(
+            f"{task['due_date']} {due_time_str}", "%Y-%m-%d %H:%M"
+        )
+
+        scheduled_time = due_datetime - timedelta(minutes=minutes_before)
+        if scheduled_time <= datetime.now():
+            db.close()
+            return None
+
+        if minutes_before >= 1440:
+            template = 'Reminder: task due tomorrow'
+        elif minutes_before >= 120:
+            template = 'Reminder: task due in 2 hours'
+        elif minutes_before >= 60:
+            template = 'Reminder: task due in 1 hour'
+        else:
+            template = 'Reminder: task is due soon'
+
+        cursor = db.execute(
+            """INSERT INTO reminders
+               (task_id, user_id, reminder_type, scheduled_time, status, message_template)
+               VALUES (?, ?, 'before_task', ?, 'pending', ?)""",
+            (task_id, task['user_id'], scheduled_time.isoformat(), template)
+        )
+        db.commit()
+        reminder_id = cursor.lastrowid
+        db.close()
+        return reminder_id
+    except Exception:
+        return None
+
+
 def get_pending_reminders():
     """Get reminders where scheduled_time <= now and status is 'pending'.
 

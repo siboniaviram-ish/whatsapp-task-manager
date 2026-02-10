@@ -32,10 +32,8 @@ TEMPLATE_DEFS = {
                 "body": "שלום! 👋 מה תרצה לעשות?",
                 "button": "📋 תפריט",
                 "items": [
-                    {"id": "task_today", "item": "📝 משימה להיום", "description": "יצירת משימה חדשה להיום"},
-                    {"id": "task_scheduled", "item": "📅 משימה מתוזמנת", "description": "משימה לתאריך מסוים"},
-                    {"id": "task_delegate", "item": "👥 האצלת משימה", "description": "שליחת משימה למישהו אחר"},
-                    {"id": "schedule_meeting", "item": "🤝 קביעת פגישה", "description": "תיאום פגישה חדשה"},
+                    {"id": "new_task", "item": "📝 משימה חדשה", "description": "יצירת משימה חדשה"},
+                    {"id": "new_meeting", "item": "🤝 קביעת פגישה", "description": "תיאום פגישה חדשה"},
                     {"id": "my_tasks", "item": "📋 המשימות שלי", "description": "צפייה וניהול משימות"},
                 ]
             }
@@ -213,6 +211,65 @@ TEMPLATE_DEFS = {
             }
         }
     },
+    "wt_task_confirm": {
+        "friendly_name": "wt_task_confirm",
+        "language": "he",
+        "variables": {"1": "סיכום משימה"},
+        "types": {
+            "twilio/quick-reply": {
+                "body": "{{1}}",
+                "actions": [
+                    {"id": "confirm_task", "title": "✅ אשר"},
+                    {"id": "retry_task", "title": "🔄 נסה שוב"},
+                ]
+            }
+        }
+    },
+    "wt_reminder_select": {
+        "friendly_name": "wt_reminder_select",
+        "language": "he",
+        "types": {
+            "twilio/list-picker": {
+                "body": "⏰ מתי לשלוח תזכורת?",
+                "button": "בחר תזכורת",
+                "items": [
+                    {"id": "remind_1h", "item": "⏰ שעה לפני", "description": "תזכורת שעה לפני"},
+                    {"id": "remind_2h", "item": "⏰ שעתיים לפני", "description": "תזכורת שעתיים לפני"},
+                    {"id": "remind_24h", "item": "⏰ יום לפני", "description": "תזכורת יום לפני"},
+                    {"id": "remind_none", "item": "🚫 בלי תזכורת", "description": "ללא תזכורת"},
+                ]
+            }
+        }
+    },
+    "wt_delegate_ask": {
+        "friendly_name": "wt_delegate_ask",
+        "language": "he",
+        "types": {
+            "twilio/quick-reply": {
+                "body": "👥 להעביר את המשימה למישהו?",
+                "actions": [
+                    {"id": "delegate_yes", "title": "👥 כן, להעביר"},
+                    {"id": "delegate_no", "title": "⏭️ לא, סיימתי"},
+                ]
+            }
+        }
+    },
+    "wt_date_fallback": {
+        "friendly_name": "wt_date_fallback",
+        "language": "he",
+        "types": {
+            "twilio/list-picker": {
+                "body": "📅 לא זיהיתי תאריך. לאיזה תאריך?",
+                "button": "בחר תאריך",
+                "items": [
+                    {"id": "date_today", "item": "📆 היום"},
+                    {"id": "date_tomorrow", "item": "📆 מחר"},
+                    {"id": "date_this_week", "item": "📆 סוף השבוע"},
+                    {"id": "date_custom", "item": "✏️ תאריך אחר"},
+                ]
+            }
+        }
+    },
 }
 
 
@@ -355,11 +412,9 @@ def send_main_menu(to_number):
     """Send the main menu as an interactive list."""
     fallback = (
         "שלום! 👋 מה תרצה לעשות?\n\n"
-        "1️⃣ 📝 משימה להיום\n"
-        "2️⃣ 📅 משימה לתאריך מסוים\n"
-        "3️⃣ 👥 משימה למישהו אחר\n"
-        "4️⃣ 🤝 קביעת פגישה\n"
-        "5️⃣ 📋 המשימות שלי\n\n"
+        "1️⃣ 📝 משימה חדשה\n"
+        "2️⃣ 🤝 קביעת פגישה\n"
+        "3️⃣ 📋 המשימות שלי\n\n"
         "👆 שלח מספר לבחירה"
     )
     return _send_interactive("wt_main_menu", to_number, fallback_text=fallback)
@@ -453,6 +508,48 @@ def send_meeting_invite_interactive(to_number, message):
     """Send meeting invite with accept/decline buttons."""
     fallback = message + "\n\n1️⃣ ✅ מאשר\n2️⃣ ❌ לא יכול"
     return _send_interactive("wt_meeting_invite", to_number, {"1": message}, fallback)
+
+
+def send_task_confirm(to_number, summary):
+    """Send task confirmation with confirm/retry buttons."""
+    fallback = summary + "\n\n1️⃣ ✅ אשר\n2️⃣ 🔄 נסה שוב"
+    return _send_interactive("wt_task_confirm", to_number, {"1": summary}, fallback)
+
+
+def send_reminder_select(to_number):
+    """Send reminder time selection as an interactive list."""
+    fallback = (
+        "⏰ מתי לשלוח תזכורת?\n\n"
+        "1️⃣ ⏰ שעה לפני\n"
+        "2️⃣ ⏰ שעתיים לפני\n"
+        "3️⃣ ⏰ יום לפני\n"
+        "4️⃣ 🚫 בלי תזכורת\n\n"
+        "👆 שלח מספר לבחירה"
+    )
+    return _send_interactive("wt_reminder_select", to_number, fallback_text=fallback)
+
+
+def send_delegate_ask(to_number):
+    """Send delegation question with yes/no buttons."""
+    fallback = (
+        "👥 להעביר את המשימה למישהו?\n\n"
+        "1️⃣ 👥 כן, להעביר\n"
+        "2️⃣ ⏭️ לא, סיימתי"
+    )
+    return _send_interactive("wt_delegate_ask", to_number, fallback_text=fallback)
+
+
+def send_date_fallback(to_number):
+    """Send date selection when smart parsing couldn't detect a date."""
+    fallback = (
+        "📅 לא זיהיתי תאריך. לאיזה תאריך?\n\n"
+        "1️⃣ היום\n"
+        "2️⃣ מחר\n"
+        "3️⃣ סוף השבוע\n"
+        "4️⃣ ✏️ תאריך אחר\n\n"
+        "👆 שלח מספר לבחירה"
+    )
+    return _send_interactive("wt_date_fallback", to_number, fallback_text=fallback)
 
 
 def preload_templates():
