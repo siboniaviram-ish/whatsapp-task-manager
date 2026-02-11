@@ -2,6 +2,7 @@ import os
 import json
 import sqlite3
 import logging
+import threading
 from datetime import datetime, date, time, timedelta
 from flask import Flask, request, jsonify, render_template, redirect, url_for, session
 from flask_cors import CORS
@@ -55,7 +56,7 @@ def rows_to_list(rows):
 def health_check():
     return jsonify({
         'status': 'ok',
-        'version': '3.0.1',
+        'version': '3.1',
         'app_url': Config.APP_URL,
         'twilio_configured': bool(Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN),
         'twilio_sid_prefix': Config.TWILIO_ACCOUNT_SID[:6] + '...' if Config.TWILIO_ACCOUNT_SID else 'NOT SET',
@@ -140,25 +141,34 @@ def register():
 
 # ============ WHATSAPP WEBHOOK ============
 
+TWIML_EMPTY = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>'
+
+
+def _process_message_background(phone, body, message_type, media_url, button_payload, list_id):
+    """Process an incoming WhatsApp message in a background thread."""
+    with app.app_context():
+        try:
+            from bot.handlers import handle_incoming_message
+            handle_incoming_message(phone, body, message_type, media_url, button_payload, list_id)
+        except Exception as e:
+            logger.error("Background message processing error: %s", e, exc_info=True)
+
+
 @app.route('/webhook/whatsapp', methods=['POST'])
 def whatsapp_webhook():
     try:
-        from bot.handlers import handle_incoming_message
         import requests as http_requests
 
         from_number = request.values.get('From', '')
         body = request.values.get('Body', '')
         num_media = int(request.values.get('NumMedia', 0))
 
-        # Always check for media URL (some edge cases report NumMedia=0 with media)
         media_url = request.values.get('MediaUrl0', None)
         media_type = request.values.get('MediaContentType0', '') or ''
 
-        # Interactive message responses (buttons / lists)
         button_payload = request.values.get('ButtonPayload', '') or None
         list_id = request.values.get('ListId', '') or None
 
-        # Clean phone number
         phone = from_number.replace('whatsapp:', '')
 
         logger.info(
@@ -172,7 +182,6 @@ def whatsapp_webhook():
         if media_url and 'audio' in media_type.lower():
             message_type = 'voice'
         elif media_url and 'vcard' in media_type.lower():
-            # Shared contact: download vCard content and put it in the body
             message_type = 'contact'
             try:
                 auth = None
@@ -187,13 +196,18 @@ def whatsapp_webhook():
             except Exception as e:
                 logger.warning("Error downloading vCard: %s", e)
 
-        handle_incoming_message(phone, body, message_type, media_url, button_payload, list_id)
+        # Process message in background thread - return 200 instantly
+        thread = threading.Thread(
+            target=_process_message_background,
+            args=(phone, body, message_type, media_url, button_payload, list_id),
+            daemon=True,
+        )
+        thread.start()
 
-        # Return empty TwiML response (messages are sent via REST API)
-        return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {'Content-Type': 'text/xml'}
+        return TWIML_EMPTY, 200, {'Content-Type': 'text/xml'}
     except Exception as e:
         logger.error(f"Webhook error: {e}", exc_info=True)
-        return '<?xml version="1.0" encoding="UTF-8"?><Response></Response>', 200, {'Content-Type': 'text/xml'}
+        return TWIML_EMPTY, 200, {'Content-Type': 'text/xml'}
 
 
 @app.route('/debug/send-test', methods=['POST'])

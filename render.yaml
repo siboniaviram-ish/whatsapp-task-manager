@@ -3,7 +3,7 @@ services:
     name: whatsapp-task-manager
     runtime: python
     buildCommand: pip install -r requirements.txt && python seed_data.py
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 3 --threads 4 --timeout 120
     envVars:
       - key: TWILIO_ACCOUNT_SID
         sync: false

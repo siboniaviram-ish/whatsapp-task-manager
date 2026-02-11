@@ -71,7 +71,7 @@ def _call_openai(system_prompt, user_text):
                     {"role": "user", "content": user_text},
                 ],
             },
-            timeout=15,
+            timeout=8,
         )
 
         if response.status_code != 200:

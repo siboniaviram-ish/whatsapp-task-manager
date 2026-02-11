@@ -638,7 +638,7 @@ def _handle_new_task(user_id, phone, text, action_id, flow_data):
 
     # Step 4: Delegation ask
     if step == 'delegate_ask':
-        if action_id == 'delegate_yes' or text in ('1', 'כן'):
+        if action_id == 'delegate_yes' or text in ('1', 'כן', 'כן, להעביר', '👥 כן, להעביר'):
             task_id = flow_data.get('task_id')
             parsed = flow_data.get('parsed', {})
             ConversationFlow.set_flow(user_id, 'delegate_inline', {
@@ -646,10 +646,12 @@ def _handle_new_task(user_id, phone, text, action_id, flow_data):
                 'task_title': parsed.get('title', ''),
                 'due_date': parsed.get('due_date', ''),
             })
-            send_text(phone, "👤 שתף איש קשר מהטלפון 📱")
+            send_text(phone,
+                "👤 שתף איש קשר מהטלפון 📱\n\n"
+                "💡 או הקלד מספר טלפון (לדוגמה: 0501234567)")
             return
 
-        elif action_id == 'delegate_no' or text in ('2', 'לא', '⏭️ לא, סיימתי'):
+        elif action_id == 'delegate_no' or text in ('2', 'לא', 'סיימתי', '⏭️ לא, סיימתי'):
             ConversationFlow.clear_flow(user_id)
             send_task_success(phone, "✅ סיימנו! המשימה נשמרה בהצלחה.")
             return
@@ -663,10 +665,27 @@ def _handle_new_task(user_id, phone, text, action_id, flow_data):
 # ---------------------------------------------------------------------------
 
 def _handle_delegate_inline(user_id, phone, text, action_id, flow_data):
-    """Receive vCard contact → record delegation → send invite → done."""
+    """Receive vCard contact or phone number → record delegation → send invite → done."""
+    logger.info("Delegation handler called. text length=%d, starts_with_vcard=%s",
+                len(text) if text else 0, bool(text and 'BEGIN:VCARD' in text))
+
     vcard_phone, vcard_name = _parse_vcard(text)
+
+    # Also accept a typed phone number (not just vCard)
+    if not vcard_phone and text:
+        cleaned = text.strip()
+        # Check if user typed a phone number directly
+        if re.match(r'^[\d\+\-\s\(\)]{7,}$', cleaned):
+            vcard_phone = _normalize_phone(cleaned)
+            vcard_name = None
+            logger.info("Parsed typed phone number: %s", vcard_phone)
+
     if not vcard_phone:
-        send_text(phone, "📱 שתף איש קשר מהטלפון כדי להמשיך.\nלחץ על 📎 ובחר *איש קשר*.\n\nאו שלח *ביטול* לחזרה.")
+        send_text(phone,
+            "📱 שתף איש קשר מהטלפון כדי להמשיך.\n"
+            "לחץ על 📎 ובחר *איש קשר*.\n\n"
+            "💡 או הקלד מספר טלפון (לדוגמה: 0501234567)\n\n"
+            "שלח *ביטול* לחזרה.")
         return
 
     task_id = flow_data.get('task_id')

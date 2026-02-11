@@ -142,6 +142,16 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_messages_user ON message_log(user_id);
         CREATE INDEX IF NOT EXISTS idx_delegated_task ON delegated_tasks(task_id);
         CREATE INDEX IF NOT EXISTS idx_meeting_task ON meetings(task_id);
+
+        -- Performance indexes
+        CREATE INDEX IF NOT EXISTS idx_tasks_user_status ON tasks(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_tasks_user_due ON tasks(user_id, due_date);
+        CREATE INDEX IF NOT EXISTS idx_reminders_user_status ON reminders(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_reminders_status_time ON reminders(status, scheduled_time);
+        CREATE INDEX IF NOT EXISTS idx_delegated_assignee ON delegated_tasks(assignee_phone);
+        CREATE INDEX IF NOT EXISTS idx_meetings_organizer ON meetings(organizer_id, status);
+        CREATE INDEX IF NOT EXISTS idx_meeting_participants_phone ON meeting_participants(phone_number);
+        CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id, last_interaction);
     ''')
 
     # Migrations: add new columns (safe to re-run)
