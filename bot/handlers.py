@@ -395,6 +395,30 @@ def _handle_voice_in_flow(user_id, phone, media_url, flow_name, flow_data):
             send_text(phone, "🎤 לא הצלחתי לזהות. אנא אמור שוב בקול ברור.")
             return
 
+        # For new_task/new_meeting: skip voice confirm, go directly to parsed confirmation
+        if flow_name == 'new_task':
+            parsed = parse_task_text(transcript)
+            flow_data['transcript'] = transcript
+            flow_data['parsed'] = parsed
+            flow_data['step'] = 'confirm'
+            flow_data['created_via'] = 'whatsapp_voice'
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            summary = _build_task_confirm_summary(parsed)
+            send_task_confirm(phone, summary)
+            return
+
+        if flow_name == 'new_meeting':
+            parsed = parse_meeting_text(transcript)
+            flow_data['transcript'] = transcript
+            flow_data['parsed'] = parsed
+            flow_data['step'] = 'confirm'
+            flow_data['created_via'] = 'whatsapp_voice'
+            ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+            summary = _build_meeting_confirm_summary(parsed)
+            send_task_confirm(phone, summary)
+            return
+
+        # Other flows: show voice transcription confirm first
         flow_data['_pending_voice'] = transcript
         flow_data['_return_flow'] = flow_name
         ConversationFlow.set_flow(user_id, 'voice_pending', flow_data)
@@ -477,17 +501,23 @@ def _handle_voice_pending(user_id, phone, text, action_id, flow_data):
 # ---------------------------------------------------------------------------
 
 def _handle_voice_confirm(user_id, phone, text, action_id, flow_data):
+    """Legacy voice_confirm flow - redirect to new_task confirmation."""
     if action_id in ('confirm_voice', 'confirm_task') or text in ('1', 'כן', 'אשר'):
-        # Use smart parse instead of old regex
-        transcript = flow_data.get('transcript', '')
-        parsed = parse_task_text(transcript)
-        flow_data['parsed'] = parsed
-        flow_data['step'] = 'confirm'
-        flow_data['created_via'] = 'whatsapp_voice'
-        ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+        parsed = flow_data.get('parsed', {})
+        if not parsed.get('title'):
+            transcript = flow_data.get('transcript', '')
+            parsed = parse_task_text(transcript)
+            flow_data['parsed'] = parsed
 
-        summary = _build_task_confirm_summary(parsed)
-        send_task_confirm(phone, summary)
+        # Skip to date/reminder step (already confirmed)
+        if not parsed.get('due_date'):
+            flow_data['step'] = 'date_fallback'
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            send_date_fallback(phone)
+        else:
+            flow_data['step'] = 'reminder'
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            send_reminder_select(phone)
     elif action_id in ('retry_voice', 'retry_task') or text in ('2', 'לא'):
         ConversationFlow.clear_flow(user_id)
         send_text(phone, "🎤 שלח הודעה קולית חדשה:")
