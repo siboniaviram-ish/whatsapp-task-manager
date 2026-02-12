@@ -12,7 +12,7 @@ from config import Config
 from database import get_db
 from services.task_service import create_task, get_tasks, complete_task, get_today_tasks
 from services.voice_service import transcribe_audio
-from services.smart_parse_service import parse_task_text, parse_meeting_text
+from services.smart_parse_service import parse_task_text, parse_meeting_text, parse_free_text
 from services.meeting_service import create_meeting, add_participant
 from services.reminder_service import create_reminders_for_task, create_single_reminder
 from services.whatsapp_service import log_message
@@ -40,6 +40,33 @@ from bot.flows import ConversationFlow
 logger = logging.getLogger(__name__)
 
 DASHBOARD_URL = Config.APP_URL
+
+WELCOME_MSG = (
+    "שלום! 👋\n"
+    "הגעת למנהל המשימות האישי שלך.\n\n"
+    "🎤 אתה יכול *להקליט הודעה* או *לכתוב* ואני אדאג לכל השאר:\n\n"
+    "📅 *פגישה* - אמור עם מי, מתי ואיפה ואני כבר אתאם לך את הכל\n\n"
+    "📝 *משימה* - אמור מה אתה צריך לבצע ומתי ואני אזכיר לך\n\n"
+    "👥 *העברה* - אם יש מישהו שאתה רוצה שיבצע את המשימה, "
+    "פשוט צרף את איש הקשר ואני כבר אתאם את כל הפרטים ואזכיר לך\n\n"
+    "פשוט תקליט או תכתוב! 🎤"
+)
+
+NEXT_PROMPT = (
+    "✏️ תכתוב או תקליט הודעה עם המשימה או הפגישה הבאה 🎤\n\n"
+    f"📋 כל המשימות: {DASHBOARD_URL}/tasks"
+)
+
+
+def _send_welcome(phone):
+    """Send the welcome/intro message."""
+    send_text(phone, WELCOME_MSG)
+
+
+def _send_next_prompt(phone):
+    """Send the 'write or record next' prompt (replaces main menu)."""
+    send_text(phone, NEXT_PROMPT)
+
 
 # Map interactive button/list text → action id (fallback when payload missing)
 BUTTON_TEXT_MAP = {
@@ -110,12 +137,17 @@ PRIORITY_ACTIONS = {
 def handle_incoming_message(from_number, message_body, message_type='text',
                             media_url=None, button_payload=None, list_id=None):
     try:
-        user_id = _get_or_create_user(from_number)
+        user_id, is_new = _get_or_create_user(from_number)
 
         try:
             log_message(user_id, 'incoming', message_type, message_body or '')
         except Exception:
             pass
+
+        # First-time user → welcome message
+        if is_new:
+            _send_welcome(from_number)
+            return
 
         # --- Voice messages ---
         if message_type == 'voice' and media_url:
@@ -125,11 +157,11 @@ def handle_incoming_message(from_number, message_body, message_type='text',
                 return_flow = flow_data.get('_return_flow')
                 return _handle_voice_in_flow(user_id, from_number, media_url, return_flow, flow_data)
             elif flow_name == 'voice_confirm':
-                return _handle_voice_standalone(user_id, from_number, media_url)
+                return _handle_voice_auto(user_id, from_number, media_url)
             elif flow_name:
                 return _handle_voice_in_flow(user_id, from_number, media_url, flow_name, flow_data)
             else:
-                return _handle_voice_standalone(user_id, from_number, media_url)
+                return _handle_voice_auto(user_id, from_number, media_url)
 
         # --- Contact shared (vCard) ---
         if message_type == 'contact' and message_body:
@@ -142,8 +174,10 @@ def handle_incoming_message(from_number, message_body, message_type='text',
                 vcard_phone, vcard_name = _parse_vcard(message_body)
                 if vcard_phone:
                     display = vcard_name or vcard_phone
-                    send_text(from_number, f"📱 קיבלתי את איש הקשר *{display}*.\nכדי להעביר משימה, צור משימה חדשה ובחר להעביר:")
-                send_main_menu(from_number)
+                    send_text(from_number,
+                        f"📱 קיבלתי את איש הקשר *{display}*.\n"
+                        "כדי להעביר משימה, קודם צור משימה ואז תוכל לצרף איש קשר.")
+                _send_next_prompt(from_number)
                 return
 
         # --- Text / button messages ---
@@ -154,13 +188,15 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         if is_cancel(text):
             ConversationFlow.clear_flow(user_id)
             send_text(from_number, "❌ הפעולה בוטלה.")
-            send_main_menu(from_number)
+            _send_next_prompt(from_number)
             return
 
-        # Priority actions
+        # Priority actions (reminder buttons, delegation/meeting responses)
         if action_id in PRIORITY_ACTIONS:
             if action_id == 'main_menu':
                 ConversationFlow.clear_flow(user_id)
+                _send_welcome(from_number)
+                return
             return _handle_global_action(user_id, from_number, action_id)
 
         # Active flow
@@ -168,30 +204,40 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         if flow_name:
             return _handle_flow(user_id, from_number, text, action_id, flow_name, flow_data)
 
-        # Global actions
-        if action_id in ('main_menu', 'my_tasks', 'new_task', 'new_meeting',
+        # Global actions (buttons from templates)
+        if action_id in ('my_tasks', 'new_task', 'new_meeting',
                          'my_meetings', 'schedule_meeting',
                          'task_done', 'snooze_30', 'snooze_60',
                          'accept_delegation', 'decline_delegation',
                          'accept_meeting', 'decline_meeting', 'decline'):
             return _handle_global_action(user_id, from_number, action_id)
 
-        # Command
+        # Greeting / help commands → welcome message
         command = get_command(text) or _action_to_command(action_id)
-        if command:
+        if command in ('welcome', 'help'):
+            _send_welcome(from_number)
+            return
+        if command == 'my_tasks':
+            _show_tasks(user_id, from_number)
+            return
+        if command == 'meetings':
+            _show_meetings(user_id, from_number)
+            return
+        if command == 'complete':
             return _handle_command(user_id, from_number, command)
 
-        # Unrecognized → menu
+        # Empty message → welcome
         if not text:
-            send_main_menu(from_number)
-        else:
-            send_text(from_number, "לא הבנתי. בחר אפשרות מהתפריט:")
-            send_main_menu(from_number)
+            _send_welcome(from_number)
+            return
+
+        # --- AUTO-PARSE: any free text → detect task/meeting → confirm ---
+        _handle_text_auto(user_id, from_number, text)
 
     except Exception as e:
         logger.error("Error handling message from %s: %s", from_number, e, exc_info=True)
         try:
-            send_text(from_number, "❌ אירעה שגיאה. נסה שוב או שלח *תפריט*.")
+            send_text(from_number, "❌ אירעה שגיאה. נסה שוב.")
         except Exception:
             pass
 
@@ -225,6 +271,7 @@ def _action_to_command(action_id):
 
 
 def _get_or_create_user(phone):
+    """Returns (user_id, is_new) tuple."""
     db = None
     try:
         db = get_db()
@@ -232,13 +279,13 @@ def _get_or_create_user(phone):
         if row:
             db.execute("UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?", (row['id'],))
             db.commit()
-            return row['id']
+            return row['id'], False
         cursor = db.execute(
             "INSERT INTO users (phone_number, whatsapp_verified, last_active) VALUES (?, 1, CURRENT_TIMESTAMP)",
             (phone,),
         )
         db.commit()
-        return cursor.lastrowid
+        return cursor.lastrowid, True
     except Exception:
         if db:
             db.rollback()
@@ -254,7 +301,7 @@ def _get_or_create_user(phone):
 
 def _handle_global_action(user_id, phone, action_id):
     if action_id == 'main_menu':
-        send_main_menu(phone)
+        _send_welcome(phone)
     elif action_id == 'my_tasks':
         _show_tasks(user_id, phone)
     elif action_id in ('new_task',):
@@ -304,7 +351,7 @@ def _handle_global_action(user_id, phone, action_id):
 def _handle_command(user_id, phone, command):
     try:
         if command == 'welcome':
-            send_main_menu(phone)
+            _send_welcome(phone)
 
         elif command == 'new_task':
             ConversationFlow.set_flow(user_id, 'new_task', {})
@@ -318,24 +365,18 @@ def _handle_command(user_id, phone, command):
             _show_tasks(user_id, phone)
 
         elif command == 'help':
-            send_text(phone, (
-                "ℹ️ *עזרה*\n━━━━━━━━━━━\n\n"
-                "שלח *היי* או *תפריט* לתפריט הראשי.\n"
-                "שלח *משימה* ליצירת משימה חדשה.\n"
-                "שלח *פגישה* לקביעת פגישה.\n"
-                "שלח הודעה קולית בכל שלב.\n"
-                "שלח *ביטול* לביטול פעולה נוכחית.\n\n"
-                "💡 תאר משימה או פגישה בהודעה אחת ואני אזהה הכל!"
-            ))
+            _send_welcome(phone)
 
         elif command == 'complete':
             tasks = get_today_tasks(user_id)
             pending = [t for t in tasks if t['status'] == 'pending']
             if pending:
                 complete_task(pending[0]['id'])
-                send_task_success(phone, f"🎉 המשימה \"{pending[0]['title']}\" סומנה כבוצעה! ✔️")
+                send_text(phone, f"🎉 המשימה \"{pending[0]['title']}\" סומנה כבוצעה! ✔️")
+                _send_next_prompt(phone)
             else:
                 send_text(phone, "🎉 אין משימות פתוחות להיום!")
+                _send_next_prompt(phone)
 
         elif command == 'meetings':
             _show_meetings(user_id, phone)
@@ -350,7 +391,7 @@ def _handle_command(user_id, phone, command):
             send_text(phone, "📅 תאר את הפגישה בהודעה אחת.\nלדוגמה: *פגישה עם יוסי מחר ב-14:00 בזום*\n\nאפשר גם הודעה קולית 🎤")
 
         else:
-            send_main_menu(phone)
+            _send_welcome(phone)
 
     except Exception as e:
         logger.error("Error handling command '%s': %s", command, e, exc_info=True)
@@ -362,29 +403,72 @@ def _handle_command(user_id, phone, command):
 # ---------------------------------------------------------------------------
 
 def _handle_voice_standalone(user_id, phone, media_url):
-    """Transcribe voice → smart parse → enter new_task at confirmation step."""
+    """Legacy: Transcribe voice → smart parse → enter new_task at confirmation step."""
+    return _handle_voice_auto(user_id, phone, media_url)
+
+
+def _handle_voice_auto(user_id, phone, media_url):
+    """Transcribe voice → auto-detect task/meeting → show confirmation."""
     try:
         transcript = transcribe_audio(media_url)
         if not transcript:
             send_text(phone, "🎤 לא הצלחתי לזהות. אנא אמור שוב בקול ברור.")
             return
 
-        # Smart parse the transcript
-        parsed = parse_task_text(transcript)
+        parsed = parse_free_text(transcript)
+        detected_type = parsed.pop("type", "task")
 
-        flow_data = {
-            'transcript': transcript,
-            'parsed': parsed,
-            'step': 'confirm',
-            'created_via': 'whatsapp_voice',
-        }
-        ConversationFlow.set_flow(user_id, 'new_task', flow_data)
-
-        # Show confirmation
-        summary = _build_task_confirm_summary(parsed)
-        send_task_confirm(phone, summary)
+        if detected_type == "meeting":
+            flow_data = {
+                'transcript': transcript,
+                'parsed': parsed,
+                'step': 'confirm',
+                'created_via': 'whatsapp_voice',
+            }
+            ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+            summary = _build_meeting_confirm_summary(parsed)
+            send_meeting_confirm(phone, summary)
+        else:
+            flow_data = {
+                'transcript': transcript,
+                'parsed': parsed,
+                'step': 'confirm',
+                'created_via': 'whatsapp_voice',
+            }
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            summary = _build_task_confirm_summary(parsed)
+            send_task_confirm(phone, summary)
     except Exception as e:
-        logger.error("Voice error for user %s: %s", user_id, e, exc_info=True)
+        logger.error("Voice auto error for user %s: %s", user_id, e, exc_info=True)
+        send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
+
+
+def _handle_text_auto(user_id, phone, text):
+    """Auto-detect task/meeting from free text → show confirmation."""
+    try:
+        parsed = parse_free_text(text)
+        detected_type = parsed.pop("type", "task")
+
+        if detected_type == "meeting":
+            flow_data = {
+                'parsed': parsed,
+                'step': 'confirm',
+                'created_via': 'whatsapp_text',
+            }
+            ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+            summary = _build_meeting_confirm_summary(parsed)
+            send_meeting_confirm(phone, summary)
+        else:
+            flow_data = {
+                'parsed': parsed,
+                'step': 'confirm',
+                'created_via': 'whatsapp_text',
+            }
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            summary = _build_task_confirm_summary(parsed)
+            send_task_confirm(phone, summary)
+    except Exception as e:
+        logger.error("Text auto error for user %s: %s", user_id, e, exc_info=True)
         send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
 
 
@@ -453,7 +537,7 @@ def _handle_flow(user_id, phone, text, action_id, flow_name, flow_data):
             return _handle_meeting_legacy(user_id, phone, text, action_id, flow_data)
         else:
             ConversationFlow.clear_flow(user_id)
-            send_main_menu(phone)
+            _send_next_prompt(phone)
     except Exception as e:
         logger.error("Flow '%s' error for user %s: %s", flow_name, user_id, e, exc_info=True)
         try:
@@ -462,7 +546,7 @@ def _handle_flow(user_id, phone, text, action_id, flow_name, flow_data):
             pass
         try:
             send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
-            send_main_menu(phone)
+            _send_next_prompt(phone)
         except Exception:
             pass
 
@@ -477,7 +561,7 @@ def _handle_voice_pending(user_id, phone, text, action_id, flow_data):
         return_flow = flow_data.pop('_return_flow', None)
         if not return_flow:
             ConversationFlow.clear_flow(user_id)
-            send_main_menu(phone)
+            _send_next_prompt(phone)
             return
         ConversationFlow.set_flow(user_id, return_flow, flow_data)
         return _handle_flow(user_id, phone, transcript, None, return_flow, flow_data)
@@ -487,7 +571,7 @@ def _handle_voice_pending(user_id, phone, text, action_id, flow_data):
         return_flow = flow_data.pop('_return_flow', None)
         if not return_flow:
             ConversationFlow.clear_flow(user_id)
-            send_main_menu(phone)
+            _send_next_prompt(phone)
             return
         ConversationFlow.set_flow(user_id, return_flow, flow_data)
         prompt = _get_flow_prompt(return_flow, flow_data)
@@ -683,7 +767,8 @@ def _handle_new_task(user_id, phone, text, action_id, flow_data):
 
         elif action_id == 'delegate_no' or text in ('2', 'לא', 'סיימתי', '⏭️ לא, סיימתי'):
             ConversationFlow.clear_flow(user_id)
-            send_task_success(phone, "✅ סיימנו! המשימה נשמרה בהצלחה.")
+            send_text(phone, "✅ סיימנו! המשימה נשמרה בהצלחה.")
+            _send_next_prompt(phone)
             return
 
         send_delegate_ask(phone)
@@ -764,7 +849,8 @@ def _handle_delegate_inline(user_id, phone, text, action_id, flow_data):
         f"📅 תאריך יעד: {display_date}\n\n"
         f"📋 {DASHBOARD_URL}/delegation"
     )
-    send_delegate_success(phone, msg)
+    send_text(phone, msg)
+    _send_next_prompt(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -811,7 +897,7 @@ def _handle_new_meeting(user_id, phone, text, action_id, flow_data):
         elif action_id == 'cancel_flow' or text in ('2', 'בטל', '❌ בטל'):
             ConversationFlow.clear_flow(user_id)
             send_text(phone, "❌ הפגישה בוטלה.")
-            send_main_menu(phone)
+            _send_next_prompt(phone)
             return
 
         send_meeting_confirm(phone, _build_meeting_confirm_summary(flow_data.get('parsed', {})))
@@ -902,7 +988,8 @@ def _finalize_new_meeting(user_id, phone, flow_data):
         f"{parts_text}\n\n"
         f"📅 {DASHBOARD_URL}/calendar"
     )
-    send_meeting_success(phone, msg)
+    send_text(phone, msg)
+    _send_next_prompt(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -957,7 +1044,8 @@ def _finalize_task_legacy(user_id, phone, flow_data):
         f"📅 תאריך יעד: {display_date}\n\n"
         f"📋 {DASHBOARD_URL}/tasks"
     )
-    send_task_success(phone, msg)
+    send_text(phone, msg)
+    _send_next_prompt(phone)
 
 
 def _handle_delegate_legacy(user_id, phone, text, action_id, flow_data):
@@ -1026,7 +1114,8 @@ def _finalize_delegation_legacy(user_id, phone, flow_data):
         f"📅 {display_date}\n\n"
         f"📋 {DASHBOARD_URL}/delegation"
     )
-    send_delegate_success(phone, msg)
+    send_text(phone, msg)
+    _send_next_prompt(phone)
 
 
 def _handle_meeting_legacy(user_id, phone, text, action_id, flow_data):
@@ -1056,7 +1145,7 @@ def _handle_meeting_legacy(user_id, phone, text, action_id, flow_data):
         return
     if action_id == 'confirm_meeting' or text in ('1', 'אשר'):
         return _finalize_meeting_legacy(user_id, phone, flow_data)
-    send_main_menu(phone)
+    _send_next_prompt(phone)
 
 
 def _finalize_meeting_legacy(user_id, phone, flow_data):
@@ -1082,7 +1171,8 @@ def _finalize_meeting_legacy(user_id, phone, flow_data):
         f"🕐 {flow_data.get('time', '')}\n\n"
         f"📅 {DASHBOARD_URL}/calendar"
     )
-    send_meeting_success(phone, msg)
+    send_text(phone, msg)
+    _send_next_prompt(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -1109,7 +1199,7 @@ def _handle_task_done(user_id, phone):
     finally:
         if db:
             db.close()
-    send_main_menu(phone)
+    _send_next_prompt(phone)
 
 
 def _handle_snooze(user_id, phone, minutes):
@@ -1153,7 +1243,7 @@ def _handle_delegation_response(user_id, phone, accepted):
         ).fetchone()
         if not delegation:
             send_text(phone, "אין הזמנות ממתינות.")
-            send_main_menu(phone)
+            _send_next_prompt(phone)
             return
 
         new_status = 'accepted' if accepted else 'rejected'
@@ -1184,7 +1274,7 @@ def _handle_delegation_response(user_id, phone, accepted):
     finally:
         if db:
             db.close()
-    send_main_menu(phone)
+    _send_next_prompt(phone)
 
 
 def _handle_meeting_response(user_id, phone, accepted):
@@ -1201,7 +1291,7 @@ def _handle_meeting_response(user_id, phone, accepted):
         ).fetchone()
         if not participant:
             send_text(phone, "אין הזמנות לפגישות ממתינות.")
-            send_main_menu(phone)
+            _send_next_prompt(phone)
             return
 
         new_status = 'accepted' if accepted else 'declined'
@@ -1228,7 +1318,7 @@ def _handle_meeting_response(user_id, phone, accepted):
     finally:
         if db:
             db.close()
-    send_main_menu(phone)
+    _send_next_prompt(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -1238,7 +1328,8 @@ def _handle_meeting_response(user_id, phone, accepted):
 def _show_tasks(user_id, phone):
     tasks = get_tasks(user_id, {'status': 'pending'})
     if not tasks:
-        send_task_success(phone, "🎉 אין משימות פתוחות! אתה מעודכן. ✨")
+        send_text(phone, "🎉 אין משימות פתוחות! אתה מעודכן. ✨")
+        _send_next_prompt(phone)
         return
 
     icons = {'pending': '⏳', 'in_progress': '🔄', 'completed': '✅', 'overdue': '🔴'}
@@ -1253,7 +1344,8 @@ def _show_tasks(user_id, phone):
         lines.append(f"\n...ועוד {len(tasks) - 10} משימות")
 
     lines.append(f"\n📋 צפה בהכל: {DASHBOARD_URL}/tasks")
-    send_task_success(phone, ''.join(lines))
+    send_text(phone, ''.join(lines))
+    _send_next_prompt(phone)
 
 
 def _show_meetings(user_id, phone):
@@ -1270,7 +1362,8 @@ def _show_meetings(user_id, phone):
             db.close()
 
     if not meetings:
-        send_meeting_success(phone, "📅 אין פגישות מתוכננות.")
+        send_text(phone, "📅 אין פגישות מתוכננות.")
+        _send_next_prompt(phone)
         return
 
     lines = ["📅 *הפגישות שלך:*\n━━━━━━━━━━━━\n"]
@@ -1279,7 +1372,8 @@ def _show_meetings(user_id, phone):
         lines.append(f"📌 {m['title']} | 🗓️ {m['meeting_date']} | 🕐 {m['start_time']}{loc}\n")
 
     lines.append(f"\n📅 צפה בהכל: {DASHBOARD_URL}/calendar")
-    send_meeting_success(phone, ''.join(lines))
+    send_text(phone, ''.join(lines))
+    _send_next_prompt(phone)
 
 
 # ---------------------------------------------------------------------------

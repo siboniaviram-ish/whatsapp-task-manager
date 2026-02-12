@@ -16,6 +16,26 @@ logger = logging.getLogger(__name__)
 HEBREW_DAYS = ['שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת', 'ראשון']
 
 
+def _get_system_prompt_auto():
+    """System prompt for auto-detecting task vs meeting and parsing in one call."""
+    today = date.today()
+    day_name = HEBREW_DAYS[today.weekday()]
+    return (
+        f"היום {today.isoformat()} (יום {day_name}). "
+        "אתה מנתח טקסט בעברית שמתאר משימה או פגישה.\n\n"
+        "אם זו משימה, החזר:\n"
+        '{"type": "task", "title": "כותרת קצרה (עד 80 תווים)", "due_date": "YYYY-MM-DD או null", '
+        '"due_time": "HH:MM או null", "priority": "low/medium/high/urgent", "assignee_name": "שם או null"}\n\n'
+        "אם זו פגישה, החזר:\n"
+        '{"type": "meeting", "title": "נושא (עד 80 תווים)", "date": "YYYY-MM-DD או null", '
+        '"time": "HH:MM או null", "location": "מיקום או null", "participants": ["שמות"]}\n\n'
+        "פגישה: מוזכרים משתתפים, מיקום, נושא דיון, תיאום, פגישה, להיפגש.\n"
+        "משימה: פעולה לביצוע, תזכורת, דד-ליין, צריך לעשות.\n"
+        "ברירת מחדל: משימה.\n"
+        "החזר רק JSON תקין, בלי הסברים."
+    )
+
+
 def _get_system_prompt_task():
     today = date.today()
     day_name = HEBREW_DAYS[today.weekday()]
@@ -166,3 +186,44 @@ def parse_meeting_text(text):
         "location": None,
         "participants": [],
     }
+
+
+def parse_free_text(text):
+    """Auto-detect task vs meeting and parse fields in a single GPT call.
+
+    Returns:
+        Dict with "type" key ("task"/"meeting") plus relevant parsed fields.
+    """
+    result = _call_openai(_get_system_prompt_auto(), text)
+
+    if result:
+        detected_type = result.get("type", "task")
+        if detected_type == "meeting":
+            return {
+                "type": "meeting",
+                "title": result.get("title", text[:80]),
+                "date": result.get("date"),
+                "time": result.get("time"),
+                "location": result.get("location"),
+                "participants": result.get("participants", []),
+            }
+        else:
+            return {
+                "type": "task",
+                "title": result.get("title", text[:80]),
+                "due_date": result.get("due_date"),
+                "due_time": result.get("due_time"),
+                "priority": result.get("priority", "medium"),
+                "assignee_name": result.get("assignee_name"),
+            }
+
+    # Fallback: keyword-based detection
+    meeting_keywords = ['פגישה', 'תיאום', 'להיפגש', 'פגישות', 'meeting']
+    if any(kw in text for kw in meeting_keywords):
+        parsed = parse_meeting_text(text)
+        parsed["type"] = "meeting"
+        return parsed
+
+    parsed = parse_task_text(text)
+    parsed["type"] = "task"
+    return parsed
