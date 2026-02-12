@@ -145,10 +145,9 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         except Exception:
             pass
 
-        # First-time user → welcome message
+        # First-time user → welcome message (then continue processing their message)
         if is_new:
             _send_welcome(from_number)
-            return
 
         # --- Voice messages ---
         if message_type == 'voice' and media_url:
