@@ -414,7 +414,7 @@ def _handle_voice_standalone(user_id, phone, media_url):
 
 
 def _handle_voice_auto(user_id, phone, media_url):
-    """Transcribe voice → auto-detect task/meeting → show confirmation."""
+    """Transcribe voice → auto-detect task/meeting → fast-track or confirm."""
     try:
         transcript = transcribe_audio(media_url)
         if not transcript:
@@ -425,15 +425,8 @@ def _handle_voice_auto(user_id, phone, media_url):
         detected_type = parsed.pop("type", "task")
 
         if detected_type == "meeting":
-            flow_data = {
-                'transcript': transcript,
-                'parsed': parsed,
-                'step': 'confirm',
-                'created_via': 'whatsapp_voice',
-            }
-            ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
-            summary = _build_meeting_confirm_summary(parsed)
-            send_meeting_confirm(phone, summary)
+            # Fast-track: skip confirmation, go to save + contact
+            _fast_track_meeting(user_id, phone, parsed, 'whatsapp_voice')
         else:
             flow_data = {
                 'transcript': transcript,
@@ -450,20 +443,14 @@ def _handle_voice_auto(user_id, phone, media_url):
 
 
 def _handle_text_auto(user_id, phone, text):
-    """Auto-detect task/meeting from free text → show confirmation."""
+    """Auto-detect task/meeting from free text → confirm or fast-track."""
     try:
         parsed = parse_free_text(text)
         detected_type = parsed.pop("type", "task")
 
         if detected_type == "meeting":
-            flow_data = {
-                'parsed': parsed,
-                'step': 'confirm',
-                'created_via': 'whatsapp_text',
-            }
-            ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
-            summary = _build_meeting_confirm_summary(parsed)
-            send_meeting_confirm(phone, summary)
+            # For meetings: skip confirmation, go straight to save + contact request
+            _fast_track_meeting(user_id, phone, parsed, 'whatsapp_text')
         else:
             flow_data = {
                 'parsed': parsed,
@@ -476,6 +463,41 @@ def _handle_text_auto(user_id, phone, text):
     except Exception as e:
         logger.error("Text auto error for user %s: %s", user_id, e, exc_info=True)
         send_text(phone, "❌ אירעה שגיאה. נסה שוב.")
+
+
+def _fast_track_meeting(user_id, phone, parsed, created_via='whatsapp_text'):
+    """Fast-track meeting: if date+time detected → save + ask contact immediately.
+    If date or time missing → ask for missing info first."""
+
+    has_date = bool(parsed.get('date'))
+    has_time = bool(parsed.get('time'))
+
+    if has_date and has_time:
+        # All info available → save meeting + ask for contact
+        flow_data = {'parsed': parsed, 'created_via': created_via}
+        return _finalize_new_meeting(user_id, phone, flow_data)
+
+    # Missing date or time → ask for it, then finalize
+    flow_data = {
+        'parsed': parsed,
+        'created_via': created_via,
+    }
+    if not has_date:
+        flow_data['step'] = 'date_fallback'
+        ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+        title = parsed.get('title', '')
+        send_text(phone,
+            f"📅 *{title}*\n\n"
+            f"📅 לאיזה תאריך?\n"
+            f"1️⃣ היום\n2️⃣ מחר\n3️⃣ סוף השבוע\n4️⃣ תאריך אחר")
+    elif not has_time:
+        flow_data['step'] = 'time_select'
+        ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+        title = parsed.get('title', '')
+        send_text(phone,
+            f"📅 *{title}* | 🗓️ {_format_display_date(parsed.get('date'))}\n\n"
+            f"🕐 באיזו שעה?\n"
+            f"1️⃣ 09:00\n2️⃣ 10:00\n3️⃣ 12:00\n4️⃣ 14:00\n5️⃣ שעה אחרת")
 
 
 def _handle_voice_in_flow(user_id, phone, media_url, flow_name, flow_data):
@@ -498,14 +520,9 @@ def _handle_voice_in_flow(user_id, phone, media_url, flow_name, flow_data):
             return
 
         if flow_name == 'new_meeting':
-            parsed = parse_meeting_text(transcript)
-            flow_data['transcript'] = transcript
-            flow_data['parsed'] = parsed
-            flow_data['step'] = 'confirm'
-            flow_data['created_via'] = 'whatsapp_voice'
-            ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
-            summary = _build_meeting_confirm_summary(parsed)
-            send_task_confirm(phone, summary)
+            parsed = parse_free_text(transcript)
+            parsed.pop("type", None)
+            _fast_track_meeting(user_id, phone, parsed, 'whatsapp_voice')
             return
 
         # Other flows: show voice transcription confirm first
@@ -1034,7 +1051,7 @@ def _finish_meeting_invite(user_id, phone, flow_data):
 def _handle_new_meeting(user_id, phone, text, action_id, flow_data):
     step = flow_data.get('step', 'input')
 
-    # Step 1: Input → auto-detect task/meeting → show confirmation
+    # Step 1: Input → auto-detect → fast-track to save + contact
     if step == 'input':
         parsed = parse_free_text(text)
         detected_type = parsed.pop("type", "task")
@@ -1051,34 +1068,16 @@ def _handle_new_meeting(user_id, phone, text, action_id, flow_data):
             send_task_confirm(phone, summary)
             return
 
-        flow_data['parsed'] = parsed
-        flow_data['step'] = 'confirm'
-        ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
-
-        summary = _build_meeting_confirm_summary(parsed)
-        send_meeting_confirm(phone, summary)
+        # Fast-track: skip confirmation → save + ask for contact
+        _fast_track_meeting(user_id, phone, parsed, flow_data.get('created_via', 'whatsapp_text'))
         return
 
-    # Step 2: Confirmation
+    # Step 2: Legacy confirmation (for old flows still in confirm step)
     if step == 'confirm':
         if action_id == 'confirm_meeting' or text in ('1', 'כן', 'אשר', '✅ אשר ושלח'):
             parsed = flow_data.get('parsed', {})
-
-            # If no date, ask for one
-            if not parsed.get('date'):
-                flow_data['step'] = 'date_fallback'
-                ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
-                send_date_fallback(phone)
-                return
-
-            # If no time, ask for one
-            if not parsed.get('time'):
-                flow_data['step'] = 'time_select'
-                ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
-                send_time_select(phone)
-                return
-
-            return _finalize_new_meeting(user_id, phone, flow_data)
+            _fast_track_meeting(user_id, phone, parsed, flow_data.get('created_via', 'whatsapp_text'))
+            return
 
         elif action_id == 'cancel_flow' or text in ('2', 'בטל', '❌ בטל'):
             ConversationFlow.clear_flow(user_id)
@@ -1086,7 +1085,10 @@ def _handle_new_meeting(user_id, phone, text, action_id, flow_data):
             _send_next_prompt(phone)
             return
 
-        send_meeting_confirm(phone, _build_meeting_confirm_summary(flow_data.get('parsed', {})))
+        # Unrecognized at confirm → treat as new meeting description
+        parsed = parse_free_text(text)
+        detected_type = parsed.pop("type", "task")
+        _fast_track_meeting(user_id, phone, parsed, flow_data.get('created_via', 'whatsapp_text'))
         return
 
     # Date fallback for meeting
