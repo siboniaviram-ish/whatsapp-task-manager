@@ -6,6 +6,7 @@ Voice input supported at every step.
 
 import re
 import logging
+import threading
 from datetime import date, datetime, timedelta
 from urllib.parse import quote
 
@@ -145,9 +146,9 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         except Exception:
             pass
 
-        # First-time user → welcome message (then continue processing their message)
+        # First-time user → send welcome after 2 min delay (so it doesn't interrupt the first action)
         if is_new:
-            _send_welcome(from_number)
+            threading.Timer(120, _send_welcome, args=(from_number,)).start()
 
         # --- Voice messages ---
         if message_type == 'voice' and media_url:
@@ -1019,9 +1020,9 @@ def _finish_meeting_invite(user_id, phone, flow_data):
     invited = flow_data.get('invited_count', 0)
     meeting_title = flow_data.get('meeting_title', '')
     display_date = flow_data.get('display_date', _format_display_date(flow_data.get('meeting_date', '')))
-    meeting_time = flow_data.get('meeting_time', '')
-    location = flow_data.get('location', '')
-    gcal_link = flow_data.get('gcal_link', '')
+    meeting_time = flow_data.get('meeting_time') or 'לא צוין'
+    location = flow_data.get('location') or ''
+    gcal_link = flow_data.get('gcal_link') or ''
 
     # Build success message
     msg = f"✅ הפגישה נקבעה בהצלחה!\n\n"
@@ -1146,8 +1147,8 @@ def _finalize_new_meeting(user_id, phone, flow_data):
         meeting_date = date.today()
 
     title = parsed.get('title', '')
-    time_str = parsed.get('time', '')
-    location = parsed.get('location', '') or ''
+    time_str = parsed.get('time') or ''
+    location = parsed.get('location') or ''
 
     meeting_data = {
         'title': title,
@@ -1161,6 +1162,7 @@ def _finalize_new_meeting(user_id, phone, flow_data):
     gcal_link = _build_gcal_link(title, meeting_date, time_str, location)
 
     display_date = meeting_date.strftime('%d/%m/%Y')
+    display_time = time_str or 'לא צוין'
     participant_names = parsed.get('participants', [])
 
     # DON'T show success yet — first collect contacts
@@ -1180,14 +1182,14 @@ def _finalize_new_meeting(user_id, phone, flow_data):
             names_list = ', '.join(participant_names)
             send_text(phone,
                 f"📌 *{title}*\n"
-                f"🗓️ {display_date} | 🕐 {time_str}\n\n"
+                f"🗓️ {display_date} | 🕐 {display_time}\n\n"
                 f"📱 כדי לתאם, שתף את אנשי הקשר של:\n"
                 f"👥 {names_list}\n\n"
                 f"לחץ 📎 ← איש קשר, או הקלד מספר טלפון.")
         else:
             send_text(phone,
                 f"📌 *{title}*\n"
-                f"🗓️ {display_date} | 🕐 {time_str}\n\n"
+                f"🗓️ {display_date} | 🕐 {display_time}\n\n"
                 f"📱 עם מי הפגישה? שתף איש קשר כדי שאשלח הזמנה.\n"
                 f"לחץ 📎 ← איש קשר, או הקלד מספר טלפון.\n\n"
                 f"שלח *סיימתי* אם אין צורך בהזמנות.")
@@ -1197,7 +1199,7 @@ def _finalize_new_meeting(user_id, phone, flow_data):
         send_text(phone,
             f"✅ הפגישה נקבעה!\n\n"
             f"📌 *{title}*\n"
-            f"🗓️ {display_date} | 🕐 {time_str}\n\n"
+            f"🗓️ {display_date} | 🕐 {display_time}\n\n"
             f"📅 הוסף ליומן:\n{gcal_link}")
         _send_next_prompt(phone)
 
@@ -1671,8 +1673,8 @@ def _build_meeting_confirm_summary(parsed):
     """Build a confirmation summary for a meeting."""
     title = parsed.get('title', '')
     meeting_date = _format_display_date(parsed.get('date'))
-    time_str = parsed.get('time', 'לא צוין')
-    location = parsed.get('location', 'לא צוין') or 'לא צוין'
+    time_str = parsed.get('time') or 'לא צוין'
+    location = parsed.get('location') or 'לא צוין'
     participants = parsed.get('participants', [])
 
     parts_str = f"\n👥 משתתפים: {', '.join(participants)}" if participants else ''

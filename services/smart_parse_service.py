@@ -73,10 +73,12 @@ def _call_openai(system_prompt, user_text):
     """Call OpenAI GPT API and return parsed JSON dict, or None on failure."""
     api_key = Config.OPENAI_API_KEY
     if not api_key:
+        logger.warning("OpenAI API key not configured — skipping GPT parse")
         return None
 
     try:
         import requests
+        logger.info("GPT parse request: text='%s'", user_text[:100])
         response = requests.post(
             "https://api.openai.com/v1/chat/completions",
             headers={
@@ -100,6 +102,7 @@ def _call_openai(system_prompt, user_text):
             return None
 
         content = response.json()["choices"][0]["message"]["content"].strip()
+        logger.info("GPT raw response: %s", content[:300])
         # Strip markdown code fences if present
         if content.startswith("```"):
             content = content.split("\n", 1)[-1]
@@ -107,9 +110,11 @@ def _call_openai(system_prompt, user_text):
                 content = content[:-3]
             content = content.strip()
 
-        return json.loads(content)
+        parsed = json.loads(content)
+        logger.info("GPT parsed result: %s", parsed)
+        return parsed
     except (json.JSONDecodeError, KeyError, IndexError) as e:
-        logger.warning("Failed to parse OpenAI response: %s", e)
+        logger.warning("Failed to parse OpenAI response: %s (raw: %s)", e, locals().get('content', 'N/A'))
         return None
     except Exception as e:
         logger.warning("OpenAI call failed: %s", e)
@@ -168,18 +173,22 @@ def parse_meeting_text(text):
         Dict with keys: title, date, time, location, participants.
         Falls back to simple extraction if GPT fails.
     """
+    logger.info("parse_meeting_text called with: '%s'", text[:100])
     result = _call_openai(_get_system_prompt_meeting(), text)
 
     if result and result.get("title"):
-        return {
+        parsed = {
             "title": result.get("title", text[:80]),
             "date": result.get("date"),
             "time": result.get("time"),
             "location": result.get("location"),
             "participants": result.get("participants", []),
         }
+        logger.info("parse_meeting_text result: %s", parsed)
+        return parsed
 
     # Fallback: use the text as title
+    logger.warning("parse_meeting_text GPT failed, using fallback for: '%s'", text[:100])
     return {
         "title": text[:80],
         "date": None,
@@ -207,8 +216,10 @@ def parse_free_text(text):
     Returns:
         Dict with "type" key ("task"/"meeting") plus relevant parsed fields.
     """
+    logger.info("parse_free_text called with: '%s'", text[:100])
     # Fast path: if text has meeting keywords, parse directly as meeting (1 GPT call)
     if _has_meeting_keywords(text):
+        logger.info("Meeting keywords detected — fast path to parse_meeting_text")
         parsed = parse_meeting_text(text)
         parsed["type"] = "meeting"
         return parsed
