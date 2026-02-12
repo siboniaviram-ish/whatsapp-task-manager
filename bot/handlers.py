@@ -798,6 +798,14 @@ def _handle_delegate_inline(user_id, phone, text, action_id, flow_data):
             logger.info("Parsed typed phone number: %s", vcard_phone)
 
     if not vcard_phone:
+        # User typed something that's not a contact — exit flow and process as new request
+        ConversationFlow.clear_flow(user_id)
+        command = get_command(text.strip()) if text else None
+        if command:
+            return _handle_command(user_id, phone, command)
+        if text and text.strip():
+            _handle_text_auto(user_id, phone, text.strip())
+            return
         send_text(phone,
             "📱 שתף איש קשר מהטלפון כדי להמשיך.\n"
             "לחץ על 📎 ובחר *איש קשר*.\n\n"
@@ -876,8 +884,11 @@ def _handle_delegate_inline(user_id, phone, text, action_id, flow_data):
 
 def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
     """Collect participant contacts and send meeting invites."""
-    # Done / finish
-    if text and text.strip() in ('סיימתי', 'ביטול', 'done', 'cancel'):
+    stripped = (text or '').strip()
+
+    # Done / finish / skip / no
+    _exit_keywords = ('סיימתי', 'ביטול', 'done', 'cancel', 'לא', 'no', 'דלג', 'skip')
+    if stripped and stripped in _exit_keywords:
         invited = flow_data.get('invited_count', 0)
         ConversationFlow.clear_flow(user_id)
         if invited > 0:
@@ -887,16 +898,26 @@ def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
 
     # Try to parse contact from vCard or typed phone number
     vcard_phone, vcard_name = _parse_vcard(text)
-    if not vcard_phone and text:
-        cleaned = text.strip()
-        if re.match(r'^[\d\+\-\s\(\)]{7,}$', cleaned):
-            vcard_phone = _normalize_phone(cleaned)
+    if not vcard_phone and stripped:
+        if re.match(r'^[\d\+\-\s\(\)]{7,}$', stripped):
+            vcard_phone = _normalize_phone(stripped)
             vcard_name = None
 
     if not vcard_phone:
-        send_text(phone,
-            "📱 שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n"
-            "שלח *סיימתי* לסיום.")
+        # User typed something that's not a contact — treat as a new request
+        # Exit the invite flow and process the text as a new command/auto-parse
+        ConversationFlow.clear_flow(user_id)
+        invited = flow_data.get('invited_count', 0)
+        if invited > 0:
+            send_text(phone, f"✅ נשלחו {invited} הזמנות לפגישה!")
+
+        # Check if it's a command
+        command = get_command(stripped)
+        if command:
+            return _handle_command(user_id, phone, command)
+
+        # Otherwise auto-parse as new task/meeting
+        _handle_text_auto(user_id, phone, stripped)
         return
 
     meeting_id = flow_data.get('meeting_id')
