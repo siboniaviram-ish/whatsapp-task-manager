@@ -953,9 +953,10 @@ def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
         except Exception as e:
             logger.warning("Failed to add meeting participant: %s", e)
 
-    # Send meeting invite
+    # Send meeting invite with Google Calendar link
     display_date = _format_display_date(meeting_date)
     display_name = vcard_name or vcard_phone
+    gcal_link = flow_data.get('gcal_link', '')
     invite_msg = (
         f"📅 הוזמנת לפגישה!\n\n"
         f"📌 נושא: *{meeting_title}*\n"
@@ -964,6 +965,8 @@ def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
     )
     if location and location != 'לא צוין':
         invite_msg += f"\n📍 מיקום: {location}"
+    if gcal_link:
+        invite_msg += f"\n\n📅 הוסף ליומן: {gcal_link}"
 
     invite_sent = False
     try:
@@ -982,11 +985,11 @@ def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
     ConversationFlow.set_flow(user_id, 'meeting_invite', flow_data)
 
     if invite_sent:
-        send_text(phone, f"✅ נשלחה הזמנה ל-*{display_name}*!")
+        send_text(phone, f"✅ נשלחה הזמנה + קישור ליומן ל-*{display_name}*!")
     else:
         send_text(phone,
             f"✅ *{display_name}* נוסף/ה לפגישה.\n"
-            f"⚠️ לא הצלחתי לשלוח הזמנה - ייתכן שהמספר לא רשום במערכת.")
+            f"⚠️ לא הצלחתי לשלוח הזמנה בוואטסאפ - ייתכן שהמספר לא רשום.")
 
     remaining = flow_data.get('pending_names', [])
     if remaining:
@@ -1159,21 +1162,21 @@ def _finalize_new_meeting(user_id, phone, flow_data):
             'meeting_date': meeting_date.isoformat(),
             'meeting_time': time_str,
             'location': location,
+            'gcal_link': gcal_link,
             'pending_names': participant_names,
             'invited_count': 0,
         })
         if participant_names:
             names_list = ', '.join(participant_names)
             send_text(phone,
-                f"📱 שתף את אנשי הקשר של המשתתפים ואני אשלח להם הזמנה:\n"
+                f"📱 כדי לתאם את הפגישה, שתף את אנשי הקשר של המשתתפים ואני אשלח להם הזמנה + קישור ליומן:\n"
                 f"👥 {names_list}\n\n"
-                f"שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n"
-                f"שלח *סיימתי* לסיום.")
+                f"שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.")
         else:
             send_text(phone,
-                "📱 רוצה להזמין משתתפים לפגישה?\n"
-                "שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n\n"
-                "שלח *סיימתי* לסיום.")
+                "📱 עם מי הפגישה?\n"
+                "שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון כדי שאשלח הזמנה + קישור ליומן.\n\n"
+                "שלח *סיימתי* אם אין צורך בהזמנות.")
     else:
         ConversationFlow.clear_flow(user_id)
         _send_next_prompt(phone)
@@ -1374,13 +1377,14 @@ def _finalize_meeting_legacy(user_id, phone, flow_data):
             'meeting_date': meeting_date.isoformat(),
             'meeting_time': time_str,
             'location': location,
+            'gcal_link': gcal_link,
             'pending_names': [],
             'invited_count': 0,
         })
         send_text(phone,
-            "📱 רוצה להזמין משתתפים לפגישה?\n"
-            "שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n\n"
-            "שלח *סיימתי* לסיום.")
+            "📱 עם מי הפגישה?\n"
+            "שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון כדי שאשלח הזמנה + קישור ליומן.\n\n"
+            "שלח *סיימתי* אם אין צורך בהזמנות.")
     else:
         ConversationFlow.clear_flow(user_id)
         _send_next_prompt(phone)
