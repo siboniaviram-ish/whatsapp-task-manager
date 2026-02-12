@@ -978,7 +978,7 @@ def _handle_new_meeting(user_id, phone, text, action_id, flow_data):
 
     # Step 2: Confirmation
     if step == 'confirm':
-        if action_id == 'confirm_meeting' or text in ('1', 'אשר', '✅ אשר ושלח'):
+        if action_id == 'confirm_meeting' or text in ('1', 'כן', 'אשר', '✅ אשר ושלח'):
             parsed = flow_data.get('parsed', {})
 
             # If no date, ask for one
@@ -1275,7 +1275,7 @@ def _handle_meeting_legacy(user_id, phone, text, action_id, flow_data):
             return _finalize_meeting_legacy(user_id, phone, flow_data)
         send_time_select(phone)
         return
-    if action_id == 'confirm_meeting' or text in ('1', 'אשר'):
+    if action_id == 'confirm_meeting' or text in ('1', 'כן', 'אשר'):
         return _finalize_meeting_legacy(user_id, phone, flow_data)
     _send_next_prompt(phone)
 
@@ -1286,25 +1286,49 @@ def _finalize_meeting_legacy(user_id, phone, flow_data):
     except ValueError:
         meeting_date = date.today()
 
-    meeting_data = {
-        'title': flow_data['title'],
-        'meeting_date': meeting_date.isoformat(),
-        'start_time': flow_data.get('time', ''),
-        'location': flow_data.get('location', ''),
-    }
-    create_meeting(user_id, meeting_data)
+    title = flow_data.get('title', '')
+    time_str = flow_data.get('time', '')
+    location = flow_data.get('location', '')
 
-    ConversationFlow.clear_flow(user_id)
+    meeting_data = {
+        'title': title,
+        'meeting_date': meeting_date.isoformat(),
+        'start_time': time_str,
+        'location': location,
+    }
+    meeting_id = create_meeting(user_id, meeting_data)
+
     display_date = meeting_date.strftime('%d/%m/%Y')
+    gcal_link = _build_gcal_link(title, meeting_date, time_str, location)
+
     msg = (
-        f"✅ הפגישה נקבעה!\n\n"
-        f"📌 *{flow_data['title']}*\n"
-        f"🗓️ {display_date}\n"
-        f"🕐 {flow_data.get('time', '')}\n\n"
-        f"📅 {DASHBOARD_URL}/calendar"
+        f"✅ הפגישה נקבעה בהצלחה!\n\n"
+        f"📌 *{title}*\n"
+        f"🗓️ תאריך: {display_date}\n"
+        f"🕐 שעה: {time_str}\n"
+        f"📍 מיקום: {location or 'לא צוין'}\n\n"
+        f"📅 הוסף ליומן: {gcal_link}"
     )
     send_text(phone, msg)
-    _send_next_prompt(phone)
+
+    # Enter invite flow to collect participant contacts
+    if meeting_id:
+        ConversationFlow.set_flow(user_id, 'meeting_invite', {
+            'meeting_id': meeting_id,
+            'meeting_title': title,
+            'meeting_date': meeting_date.isoformat(),
+            'meeting_time': time_str,
+            'location': location,
+            'pending_names': [],
+            'invited_count': 0,
+        })
+        send_text(phone,
+            "📱 רוצה להזמין משתתפים לפגישה?\n"
+            "שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n\n"
+            "שלח *סיימתי* לסיום.")
+    else:
+        ConversationFlow.clear_flow(user_id)
+        _send_next_prompt(phone)
 
 
 # ---------------------------------------------------------------------------
