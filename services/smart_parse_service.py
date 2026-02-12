@@ -199,22 +199,25 @@ def _has_meeting_keywords(text):
 
 
 def parse_free_text(text):
-    """Auto-detect task vs meeting and parse fields in a single GPT call.
+    """Auto-detect task vs meeting and parse fields.
+
+    If text contains clear meeting keywords, skip auto-detect and parse
+    directly as meeting (single GPT call). Otherwise use auto-detect prompt.
 
     Returns:
         Dict with "type" key ("task"/"meeting") plus relevant parsed fields.
     """
+    # Fast path: if text has meeting keywords, parse directly as meeting (1 GPT call)
+    if _has_meeting_keywords(text):
+        parsed = parse_meeting_text(text)
+        parsed["type"] = "meeting"
+        return parsed
+
+    # Auto-detect via GPT
     result = _call_openai(_get_system_prompt_auto(), text)
 
     if result:
         detected_type = result.get("type", "task")
-
-        # Safety net: if GPT said "task" but text clearly mentions a meeting, override
-        if detected_type != "meeting" and _has_meeting_keywords(text):
-            logger.info("GPT detected '%s' but text has meeting keywords, re-parsing as meeting", detected_type)
-            parsed = parse_meeting_text(text)
-            parsed["type"] = "meeting"
-            return parsed
 
         if detected_type == "meeting":
             return {
@@ -235,12 +238,7 @@ def parse_free_text(text):
                 "assignee_name": result.get("assignee_name"),
             }
 
-    # Fallback: keyword-based detection
-    if _has_meeting_keywords(text):
-        parsed = parse_meeting_text(text)
-        parsed["type"] = "meeting"
-        return parsed
-
+    # Fallback: treat as task
     parsed = parse_task_text(text)
     parsed["type"] = "task"
     return parsed

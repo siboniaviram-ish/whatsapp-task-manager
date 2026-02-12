@@ -199,6 +199,12 @@ def handle_incoming_message(from_number, message_body, message_type='text',
                 return
             return _handle_global_action(user_id, from_number, action_id)
 
+        # Explicit new task/meeting command → clear any existing flow and start fresh
+        command = get_command(text)
+        if command in ('new_task', 'new_meeting'):
+            ConversationFlow.clear_flow(user_id)
+            return _handle_command(user_id, from_number, command)
+
         # Active flow
         flow_name, flow_data = ConversationFlow.get_flow(user_id)
         if flow_name:
@@ -622,9 +628,23 @@ def _handle_voice_confirm(user_id, phone, text, action_id, flow_data):
 def _handle_new_task(user_id, phone, text, action_id, flow_data):
     step = flow_data.get('step', 'input')
 
-    # Step 1: Input → smart parse → show confirmation
+    # Step 1: Input → auto-detect task/meeting → show confirmation
     if step == 'input':
-        parsed = parse_task_text(text)
+        parsed = parse_free_text(text)
+        detected_type = parsed.pop("type", "task")
+
+        # If user typed a meeting while in task flow, switch to meeting flow
+        if detected_type == "meeting":
+            flow_data = {
+                'parsed': parsed,
+                'step': 'confirm',
+                'created_via': flow_data.get('created_via', 'whatsapp_text'),
+            }
+            ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
+            summary = _build_meeting_confirm_summary(parsed)
+            send_meeting_confirm(phone, summary)
+            return
+
         flow_data['parsed'] = parsed
         flow_data['step'] = 'confirm'
         flow_data.setdefault('created_via', 'whatsapp_text')
@@ -986,9 +1006,23 @@ def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
 def _handle_new_meeting(user_id, phone, text, action_id, flow_data):
     step = flow_data.get('step', 'input')
 
-    # Step 1: Input → smart parse → show confirmation
+    # Step 1: Input → auto-detect task/meeting → show confirmation
     if step == 'input':
-        parsed = parse_meeting_text(text)
+        parsed = parse_free_text(text)
+        detected_type = parsed.pop("type", "task")
+
+        # If user typed a task while in meeting flow, switch to task flow
+        if detected_type == "task":
+            flow_data = {
+                'parsed': parsed,
+                'step': 'confirm',
+                'created_via': flow_data.get('created_via', 'whatsapp_text'),
+            }
+            ConversationFlow.set_flow(user_id, 'new_task', flow_data)
+            summary = _build_task_confirm_summary(parsed)
+            send_task_confirm(phone, summary)
+            return
+
         flow_data['parsed'] = parsed
         flow_data['step'] = 'confirm'
         ConversationFlow.set_flow(user_id, 'new_meeting', flow_data)
