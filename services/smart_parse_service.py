@@ -29,9 +29,10 @@ def _get_system_prompt_auto():
         "אם זו פגישה, החזר:\n"
         '{"type": "meeting", "title": "נושא (עד 80 תווים)", "date": "YYYY-MM-DD או null", '
         '"time": "HH:MM או null", "location": "מיקום או null", "participants": ["שמות"]}\n\n'
-        "פגישה: מוזכרים משתתפים, מיקום, נושא דיון, תיאום, פגישה, להיפגש.\n"
-        "משימה: פעולה לביצוע, תזכורת, דד-ליין, צריך לעשות.\n"
-        "ברירת מחדל: משימה.\n"
+        "חשוב מאוד: אם מוזכרת המילה פגישה, תיאום, להיפגש, לתאם, meeting - זו תמיד פגישה!\n"
+        "פגישה: מוזכרים משתתפים, מיקום, נושא דיון, תיאום, פגישה, להיפגש, לתאם.\n"
+        "משימה: פעולה לביצוע, תזכורת, דד-ליין, צריך לעשות (ללא אזכור של פגישה/תיאום).\n"
+        "אם יש ספק - בדוק אם יש מילה שקשורה לפגישה. אם כן, סמן כ-meeting.\n"
         "החזר רק JSON תקין, בלי הסברים."
     )
 
@@ -188,6 +189,15 @@ def parse_meeting_text(text):
     }
 
 
+MEETING_KEYWORDS = ['פגישה', 'פגישות', 'תיאום', 'לתאם', 'תאם', 'להיפגש', 'meeting']
+
+
+def _has_meeting_keywords(text):
+    """Check if text contains clear meeting-related keywords."""
+    lower = text.lower()
+    return any(kw in lower for kw in MEETING_KEYWORDS)
+
+
 def parse_free_text(text):
     """Auto-detect task vs meeting and parse fields in a single GPT call.
 
@@ -198,6 +208,14 @@ def parse_free_text(text):
 
     if result:
         detected_type = result.get("type", "task")
+
+        # Safety net: if GPT said "task" but text clearly mentions a meeting, override
+        if detected_type != "meeting" and _has_meeting_keywords(text):
+            logger.info("GPT detected '%s' but text has meeting keywords, re-parsing as meeting", detected_type)
+            parsed = parse_meeting_text(text)
+            parsed["type"] = "meeting"
+            return parsed
+
         if detected_type == "meeting":
             return {
                 "type": "meeting",
@@ -218,8 +236,7 @@ def parse_free_text(text):
             }
 
     # Fallback: keyword-based detection
-    meeting_keywords = ['פגישה', 'תיאום', 'להיפגש', 'פגישות', 'meeting']
-    if any(kw in text for kw in meeting_keywords):
+    if _has_meeting_keywords(text):
         parsed = parse_meeting_text(text)
         parsed["type"] = "meeting"
         return parsed
