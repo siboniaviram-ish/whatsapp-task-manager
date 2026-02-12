@@ -56,7 +56,7 @@ def rows_to_list(rows):
 def health_check():
     return jsonify({
         'status': 'ok',
-        'version': '3.2',
+        'version': '3.3',
         'app_url': Config.APP_URL,
         'twilio_configured': bool(Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN),
         'twilio_sid_prefix': Config.TWILIO_ACCOUNT_SID[:6] + '...' if Config.TWILIO_ACCOUNT_SID else 'NOT SET',

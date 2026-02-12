@@ -6,7 +6,8 @@ Falls back to regex-based parsing if OpenAI is unavailable.
 
 import json
 import logging
-from datetime import date, datetime
+import re
+from datetime import date, datetime, timedelta
 
 from config import Config
 
@@ -163,6 +164,55 @@ def parse_task_text(text):
     }
 
 
+def _extract_hebrew_date(text):
+    """Extract date from Hebrew text using local patterns (no GPT needed)."""
+    today = date.today()
+    lower = text.lower()
+
+    if 'מחר' in lower or 'למחר' in lower:
+        return (today + timedelta(days=1)).isoformat()
+    if 'היום' in lower:
+        return today.isoformat()
+    if 'מחרתיים' in lower:
+        return (today + timedelta(days=2)).isoformat()
+
+    # "ביום ראשון/שני/..." — next occurrence of that day
+    day_map = {
+        'ראשון': 6, 'שני': 0, 'שלישי': 1, 'רביעי': 2,
+        'חמישי': 3, 'שישי': 4, 'שבת': 5,
+    }
+    for heb_day, weekday in day_map.items():
+        if f'יום {heb_day}' in lower or f'ביום {heb_day}' in lower:
+            days_ahead = (weekday - today.weekday()) % 7
+            if days_ahead == 0:
+                days_ahead = 7
+            return (today + timedelta(days=days_ahead)).isoformat()
+
+    return None
+
+
+def _extract_hebrew_time(text):
+    """Extract time from Hebrew text using local patterns (no GPT needed)."""
+    # "בשעה 14:00" or "בשעה 14" or "ב-14:00" or "ב14:00"
+    m = re.search(r'(?:בשעה|ב-?)\s*(\d{1,2})[:.](\d{2})', text)
+    if m:
+        return f"{int(m.group(1)):02d}:{m.group(2)}"
+
+    # "בשעה 12" or "ב-12" (hour only, no minutes)
+    m = re.search(r'(?:בשעה|ב-)\s*(\d{1,2})(?:\s|$|,)', text)
+    if m:
+        hour = int(m.group(1))
+        if 0 <= hour <= 23:
+            return f"{hour:02d}:00"
+
+    # Standalone "שעה XX:XX" pattern
+    m = re.search(r'שעה\s+(\d{1,2})[:.](\d{2})', text)
+    if m:
+        return f"{int(m.group(1)):02d}:{m.group(2)}"
+
+    return None
+
+
 def parse_meeting_text(text):
     """Parse free-form Hebrew text into meeting fields using GPT.
 
@@ -171,7 +221,7 @@ def parse_meeting_text(text):
 
     Returns:
         Dict with keys: title, date, time, location, participants.
-        Falls back to simple extraction if GPT fails.
+        Falls back to local Hebrew extraction if GPT fails.
     """
     logger.info("parse_meeting_text called with: '%s'", text[:100])
     result = _call_openai(_get_system_prompt_meeting(), text)
@@ -184,15 +234,26 @@ def parse_meeting_text(text):
             "location": result.get("location"),
             "participants": result.get("participants", []),
         }
+        # Fill in missing fields from local Hebrew extraction
+        if not parsed.get('date'):
+            local_date = _extract_hebrew_date(text)
+            if local_date:
+                logger.info("GPT missed date, local extraction found: %s", local_date)
+                parsed['date'] = local_date
+        if not parsed.get('time'):
+            local_time = _extract_hebrew_time(text)
+            if local_time:
+                logger.info("GPT missed time, local extraction found: %s", local_time)
+                parsed['time'] = local_time
         logger.info("parse_meeting_text result: %s", parsed)
         return parsed
 
-    # Fallback: use the text as title
-    logger.warning("parse_meeting_text GPT failed, using fallback for: '%s'", text[:100])
+    # Full fallback: GPT failed entirely — use local extraction
+    logger.warning("parse_meeting_text GPT failed, using local fallback for: '%s'", text[:100])
     return {
         "title": text[:80],
-        "date": None,
-        "time": None,
+        "date": _extract_hebrew_date(text),
+        "time": _extract_hebrew_time(text),
         "location": None,
         "participants": [],
     }
