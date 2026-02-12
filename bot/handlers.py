@@ -7,6 +7,7 @@ Voice input supported at every step.
 import re
 import logging
 from datetime import date, datetime, timedelta
+from urllib.parse import quote
 
 from config import Config
 from database import get_db
@@ -1052,7 +1053,7 @@ def _handle_new_meeting(user_id, phone, text, action_id, flow_data):
 
 
 def _finalize_new_meeting(user_id, phone, flow_data):
-    """Save the meeting and send success."""
+    """Save the meeting, send Google Calendar link, then ask for participant contacts."""
     parsed = flow_data.get('parsed', {})
 
     try:
@@ -1077,6 +1078,14 @@ def _finalize_new_meeting(user_id, phone, flow_data):
     if participant_names:
         parts_text = f"\n👥 משתתפים: {', '.join(participant_names)}"
 
+    # Build Google Calendar link
+    gcal_link = _build_gcal_link(
+        parsed.get('title', ''),
+        meeting_date,
+        time_str,
+        location if location != 'לא צוין' else '',
+    )
+
     msg = (
         f"✅ הפגישה נקבעה בהצלחה!\n\n"
         f"📌 *{parsed.get('title', '')}*\n"
@@ -1084,12 +1093,12 @@ def _finalize_new_meeting(user_id, phone, flow_data):
         f"🕐 שעה: {time_str}\n"
         f"📍 מיקום: {location}"
         f"{parts_text}\n\n"
-        f"📅 {DASHBOARD_URL}/calendar"
+        f"📅 הוסף ליומן: {gcal_link}"
     )
     send_text(phone, msg)
 
-    # If participants detected, enter invite flow to collect their phone numbers
-    if participant_names and meeting_id:
+    # Always enter invite flow to collect participant contacts
+    if meeting_id:
         ConversationFlow.set_flow(user_id, 'meeting_invite', {
             'meeting_id': meeting_id,
             'meeting_title': parsed.get('title', ''),
@@ -1099,12 +1108,18 @@ def _finalize_new_meeting(user_id, phone, flow_data):
             'pending_names': participant_names,
             'invited_count': 0,
         })
-        names_list = ', '.join(participant_names)
-        send_text(phone,
-            f"📱 שתף את אנשי הקשר של המשתתפים ואני אשלח להם הזמנה:\n"
-            f"👥 {names_list}\n\n"
-            f"שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n"
-            f"שלח *סיימתי* לסיום.")
+        if participant_names:
+            names_list = ', '.join(participant_names)
+            send_text(phone,
+                f"📱 שתף את אנשי הקשר של המשתתפים ואני אשלח להם הזמנה:\n"
+                f"👥 {names_list}\n\n"
+                f"שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n"
+                f"שלח *סיימתי* לסיום.")
+        else:
+            send_text(phone,
+                "📱 רוצה להזמין משתתפים לפגישה?\n"
+                "שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n\n"
+                "שלח *סיימתי* לסיום.")
     else:
         ConversationFlow.clear_flow(user_id)
         _send_next_prompt(phone)
@@ -1758,6 +1773,42 @@ def _reminder_text(minutes):
     if minutes >= 60:
         return 'שעה לפני'
     return f'{minutes} דקות לפני'
+
+
+def _build_gcal_link(title, meeting_date, time_str, location=''):
+    """Build a Google Calendar 'add event' link."""
+    try:
+        # Parse start time
+        if time_str and ':' in time_str:
+            parts = time_str.split(':')
+            hour, minute = int(parts[0]), int(parts[1])
+        else:
+            hour, minute = 9, 0  # default 09:00
+
+        start_dt = datetime(meeting_date.year, meeting_date.month, meeting_date.day, hour, minute)
+        end_dt = start_dt + timedelta(hours=1)  # 1 hour default
+
+        # Google Calendar date format: YYYYMMDDTHHmmSS
+        date_fmt = '%Y%m%dT%H%M%S'
+        dates = f"{start_dt.strftime(date_fmt)}/{end_dt.strftime(date_fmt)}"
+
+        params = (
+            f"https://calendar.google.com/calendar/render?"
+            f"action=TEMPLATE"
+            f"&text={quote(title)}"
+            f"&dates={dates}"
+        )
+        if location:
+            params += f"&location={quote(location)}"
+
+        return params
+    except Exception:
+        # Fallback: date-only link
+        date_str = meeting_date.strftime('%Y%m%d')
+        return (
+            f"https://calendar.google.com/calendar/render?"
+            f"action=TEMPLATE&text={quote(title)}&dates={date_str}/{date_str}"
+        )
 
 
 def _get_flow_prompt(flow_name, flow_data):
