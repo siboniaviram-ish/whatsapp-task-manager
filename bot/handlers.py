@@ -166,7 +166,7 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         # --- Contact shared (vCard) ---
         if message_type == 'contact' and message_body:
             flow_name, flow_data = ConversationFlow.get_flow(user_id)
-            if flow_name in ('delegate_inline', 'delegate', 'meeting'):
+            if flow_name in ('delegate_inline', 'delegate', 'meeting', 'meeting_invite'):
                 text = message_body
                 action_id = _resolve_action_id(None, None, text)
                 return _handle_flow(user_id, from_number, text, action_id, flow_name, flow_data)
@@ -528,6 +528,8 @@ def _handle_flow(user_id, phone, text, action_id, flow_name, flow_data):
             return _handle_new_meeting(user_id, phone, text, action_id, flow_data)
         elif flow_name == 'delegate_inline':
             return _handle_delegate_inline(user_id, phone, text, action_id, flow_data)
+        elif flow_name == 'meeting_invite':
+            return _handle_meeting_invite(user_id, phone, text, action_id, flow_data)
         # Legacy flows
         elif flow_name == 'create_task':
             return _handle_create_task_legacy(user_id, phone, text, action_id, flow_data)
@@ -835,22 +837,123 @@ def _handle_delegate_inline(user_id, phone, text, action_id, flow_data):
         f"📌 משימה: *{task_title}*\n"
         f"📅 תאריך יעד: {display_date}"
     )
+    invite_sent = False
     try:
-        send_delegation_invite(vcard_phone, invite_msg)
+        result = send_delegation_invite(vcard_phone, invite_msg)
+        invite_sent = bool(result)
+        logger.info("Delegation invite to %s: result=%s", vcard_phone, result)
     except Exception as e:
         logger.warning("Failed to send delegation invite to %s: %s", vcard_phone, e)
 
     ConversationFlow.clear_flow(user_id)
 
-    msg = (
-        f"✅ המשימה הועברה בהצלחה!\n\n"
-        f"👤 נשלח אל: *{display_assignee}*\n"
-        f"📌 משימה: *{task_title}*\n"
-        f"📅 תאריך יעד: {display_date}\n\n"
-        f"📋 {DASHBOARD_URL}/delegation"
-    )
+    if invite_sent:
+        msg = (
+            f"✅ המשימה הועברה בהצלחה!\n\n"
+            f"👤 נשלח אל: *{display_assignee}*\n"
+            f"📌 משימה: *{task_title}*\n"
+            f"📅 תאריך יעד: {display_date}\n\n"
+            f"📋 {DASHBOARD_URL}/delegation"
+        )
+    else:
+        msg = (
+            f"✅ המשימה נשמרה ומוקצת ל-*{display_assignee}*\n\n"
+            f"📌 משימה: *{task_title}*\n"
+            f"📅 תאריך יעד: {display_date}\n\n"
+            f"⚠️ לא הצלחתי לשלוח הזמנה.\n"
+            f"ייתכן שהמספר לא רשום במערכת.\n"
+            f"שלח את הלינק הזה ידנית:\n"
+            f"📋 {DASHBOARD_URL}/delegation"
+        )
     send_text(phone, msg)
     _send_next_prompt(phone)
+
+
+# ---------------------------------------------------------------------------
+# Meeting participant invite flow
+# User shares contacts → add participant → send invite → repeat
+# ---------------------------------------------------------------------------
+
+def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
+    """Collect participant contacts and send meeting invites."""
+    # Done / finish
+    if text and text.strip() in ('סיימתי', 'ביטול', 'done', 'cancel'):
+        invited = flow_data.get('invited_count', 0)
+        ConversationFlow.clear_flow(user_id)
+        if invited > 0:
+            send_text(phone, f"✅ נשלחו {invited} הזמנות לפגישה!")
+        _send_next_prompt(phone)
+        return
+
+    # Try to parse contact from vCard or typed phone number
+    vcard_phone, vcard_name = _parse_vcard(text)
+    if not vcard_phone and text:
+        cleaned = text.strip()
+        if re.match(r'^[\d\+\-\s\(\)]{7,}$', cleaned):
+            vcard_phone = _normalize_phone(cleaned)
+            vcard_name = None
+
+    if not vcard_phone:
+        send_text(phone,
+            "📱 שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n"
+            "שלח *סיימתי* לסיום.")
+        return
+
+    meeting_id = flow_data.get('meeting_id')
+    meeting_title = flow_data.get('meeting_title', '')
+    meeting_date = flow_data.get('meeting_date', '')
+    meeting_time = flow_data.get('meeting_time', '')
+    location = flow_data.get('location', '')
+
+    # Add participant to DB
+    if meeting_id:
+        try:
+            add_participant(meeting_id, vcard_phone, vcard_name)
+        except Exception as e:
+            logger.warning("Failed to add meeting participant: %s", e)
+
+    # Send meeting invite
+    display_date = _format_display_date(meeting_date)
+    display_name = vcard_name or vcard_phone
+    invite_msg = (
+        f"📅 הוזמנת לפגישה!\n\n"
+        f"📌 נושא: *{meeting_title}*\n"
+        f"🗓️ תאריך: {display_date}\n"
+        f"🕐 שעה: {meeting_time}"
+    )
+    if location and location != 'לא צוין':
+        invite_msg += f"\n📍 מיקום: {location}"
+
+    invite_sent = False
+    try:
+        result = send_meeting_invite_interactive(vcard_phone, invite_msg)
+        invite_sent = bool(result)
+        logger.info("Meeting invite to %s: result=%s", vcard_phone, result)
+    except Exception as e:
+        logger.warning("Failed to send meeting invite to %s: %s", vcard_phone, e)
+
+    # Update flow state
+    flow_data['invited_count'] = flow_data.get('invited_count', 0) + 1
+    pending = flow_data.get('pending_names', [])
+    if pending:
+        # Remove the first matching name (approximate)
+        flow_data['pending_names'] = pending[1:] if len(pending) > 1 else []
+    ConversationFlow.set_flow(user_id, 'meeting_invite', flow_data)
+
+    if invite_sent:
+        send_text(phone, f"✅ נשלחה הזמנה ל-*{display_name}*!")
+    else:
+        send_text(phone,
+            f"✅ *{display_name}* נוסף/ה לפגישה.\n"
+            f"⚠️ לא הצלחתי לשלוח הזמנה - ייתכן שהמספר לא רשום במערכת.")
+
+    remaining = flow_data.get('pending_names', [])
+    if remaining:
+        send_text(phone,
+            f"📱 שתף את איש הקשר הבא: *{remaining[0]}*\n"
+            f"או שלח *סיימתי* לסיום.")
+    else:
+        send_text(phone, "📱 שתף עוד אנשי קשר או שלח *סיימתי* לסיום.")
 
 
 # ---------------------------------------------------------------------------
@@ -968,12 +1071,7 @@ def _finalize_new_meeting(user_id, phone, flow_data):
     display_date = meeting_date.strftime('%d/%m/%Y')
     location = parsed.get('location', 'לא צוין') or 'לא צוין'
     time_str = parsed.get('time', '')
-
-    # If GPT detected participant names, we log them but can't auto-invite
-    # (would need phone numbers). Show them in the success message.
     participant_names = parsed.get('participants', [])
-
-    ConversationFlow.clear_flow(user_id)
 
     parts_text = ''
     if participant_names:
@@ -989,7 +1087,27 @@ def _finalize_new_meeting(user_id, phone, flow_data):
         f"📅 {DASHBOARD_URL}/calendar"
     )
     send_text(phone, msg)
-    _send_next_prompt(phone)
+
+    # If participants detected, enter invite flow to collect their phone numbers
+    if participant_names and meeting_id:
+        ConversationFlow.set_flow(user_id, 'meeting_invite', {
+            'meeting_id': meeting_id,
+            'meeting_title': parsed.get('title', ''),
+            'meeting_date': meeting_date.isoformat(),
+            'meeting_time': time_str,
+            'location': location,
+            'pending_names': participant_names,
+            'invited_count': 0,
+        })
+        names_list = ', '.join(participant_names)
+        send_text(phone,
+            f"📱 שתף את אנשי הקשר של המשתתפים ואני אשלח להם הזמנה:\n"
+            f"👥 {names_list}\n\n"
+            f"שתף איש קשר מהטלפון 📎 או הקלד מספר טלפון.\n"
+            f"שלח *סיימתי* לסיום.")
+    else:
+        ConversationFlow.clear_flow(user_id)
+        _send_next_prompt(phone)
 
 
 # ---------------------------------------------------------------------------
