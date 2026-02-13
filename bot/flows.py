@@ -23,6 +23,7 @@ VALID_FLOWS = {
     'new_task',
     'new_meeting',
     'delegate_inline',
+    'meeting_invite',
     'voice_pending',
     'voice_confirm',
     # Legacy flows

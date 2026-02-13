@@ -56,7 +56,7 @@ def rows_to_list(rows):
 def health_check():
     return jsonify({
         'status': 'ok',
-        'version': '3.4',
+        'version': '3.5',
         'app_url': Config.APP_URL,
         'twilio_configured': bool(Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN),
         'twilio_sid_prefix': Config.TWILIO_ACCOUNT_SID[:6] + '...' if Config.TWILIO_ACCOUNT_SID else 'NOT SET',
@@ -621,6 +621,8 @@ def setup_scheduler():
         def check_reminders():
             with app.app_context():
                 due = process_due_reminders()
+                if due:
+                    logger.info("Processing %d due reminders", len(due))
                 for reminder in due:
                     try:
                         title = reminder.get('task_title', reminder.get('title', 'משימה'))
@@ -634,18 +636,26 @@ def setup_scheduler():
                             f"📅 תאריך יעד: {due_date}{time_str}"
                         )
 
-                        # Get the user's phone number
-                        db = get_db()
-                        user = db.execute(
-                            "SELECT phone_number FROM users WHERE id = ?",
-                            (reminder['user_id'],)
-                        ).fetchone()
-                        db.close()
+                        phone_number = reminder.get('phone_number')
+                        if not phone_number:
+                            db = get_db()
+                            user = db.execute(
+                                "SELECT phone_number FROM users WHERE id = ?",
+                                (reminder['user_id'],)
+                            ).fetchone()
+                            db.close()
+                            phone_number = user['phone_number'] if user else None
 
-                        if user:
-                            send_reminder_interactive(user['phone_number'], msg)
+                        if phone_number:
+                            result = send_reminder_interactive(phone_number, msg)
+                            logger.info("Reminder sent to %s for task '%s': result=%s",
+                                       phone_number, title, result)
+                        else:
+                            logger.warning("No phone number for user_id=%s, skipping reminder",
+                                          reminder['user_id'])
                     except Exception as e:
-                        logger.error(f"Failed to send reminder: {e}")
+                        logger.error("Failed to send reminder for task '%s': %s",
+                                    reminder.get('task_title', '?'), e, exc_info=True)
                     finally:
                         try:
                             mark_reminder_sent(reminder['reminder_id'])

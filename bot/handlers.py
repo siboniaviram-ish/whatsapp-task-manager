@@ -60,8 +60,12 @@ NEXT_PROMPT = (
 )
 
 
-def _send_welcome(phone):
-    """Send the welcome/intro message."""
+def _send_welcome(phone, user_id=None):
+    """Send the welcome/intro message. If user_id given, skip if user is in an active flow."""
+    if user_id:
+        flow_name, _ = ConversationFlow.get_flow(user_id)
+        if flow_name:
+            return  # User is mid-flow, don't interrupt
     send_text(phone, WELCOME_MSG)
 
 
@@ -146,9 +150,9 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         except Exception:
             pass
 
-        # First-time user → send welcome after 2 min delay (so it doesn't interrupt the first action)
+        # First-time user → send welcome after 2 min delay (skip if user is mid-flow)
         if is_new:
-            threading.Timer(120, _send_welcome, args=(from_number,)).start()
+            threading.Timer(120, _send_welcome, args=(from_number, user_id)).start()
 
         # --- Voice messages ---
         if message_type == 'voice' and media_url:
@@ -427,10 +431,11 @@ def _handle_voice_standalone(user_id, phone, media_url):
     return _handle_voice_auto(user_id, phone, media_url)
 
 
-def _handle_voice_auto(user_id, phone, media_url):
+def _handle_voice_auto(user_id, phone, media_url, transcript=None):
     """Transcribe voice → auto-detect task/meeting → fast-track or confirm."""
     try:
-        transcript = transcribe_audio(media_url)
+        if not transcript:
+            transcript = transcribe_audio(media_url)
         if not transcript:
             send_text(phone, "🎤 לא הצלחתי לזהות. אנא אמור שוב בקול ברור.")
             return
@@ -538,6 +543,14 @@ def _handle_voice_in_flow(user_id, phone, media_url, flow_name, flow_data):
             parsed.pop("type", None)
             _fast_track_meeting(user_id, phone, parsed, 'whatsapp_voice')
             return
+
+        # meeting_invite / delegate_inline: voice = new request, finish current + auto-detect
+        if flow_name in ('meeting_invite', 'delegate_inline'):
+            if flow_name == 'meeting_invite':
+                _finish_meeting_invite(user_id, phone, flow_data, send_prompt=False)
+            else:
+                ConversationFlow.clear_flow(user_id)
+            return _handle_voice_auto(user_id, phone, media_url, transcript=transcript)
 
         # Other flows: show voice transcription confirm first
         flow_data['_pending_voice'] = transcript
@@ -952,7 +965,8 @@ def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
 
     if not vcard_phone:
         # User typed something that's not a contact — exit flow and process as new request
-        _finish_meeting_invite(user_id, phone, flow_data)
+        # Don't send next_prompt since we're about to start a new flow
+        _finish_meeting_invite(user_id, phone, flow_data, send_prompt=False)
 
         # Check if it's a command
         command = get_command(stripped)
@@ -962,6 +976,8 @@ def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
         # Otherwise auto-parse as new task/meeting
         if stripped:
             _handle_text_auto(user_id, phone, stripped)
+        else:
+            _send_next_prompt(phone)
         return
 
     meeting_id = flow_data.get('meeting_id')
@@ -1026,7 +1042,7 @@ def _handle_meeting_invite(user_id, phone, text, action_id, flow_data):
         send_text(phone, "📱 שתף עוד אנשי קשר או שלח *סיימתי* לסיום.")
 
 
-def _finish_meeting_invite(user_id, phone, flow_data):
+def _finish_meeting_invite(user_id, phone, flow_data, send_prompt=True):
     """Complete the meeting invite flow — show success + calendar link."""
     ConversationFlow.clear_flow(user_id)
 
@@ -1054,7 +1070,8 @@ def _finish_meeting_invite(user_id, phone, flow_data):
     raw_time = flow_data.get('meeting_time') or ''
     _add_to_calendar_or_send_link(user_id, phone, meeting_title, meeting_date_str, raw_time, location, gcal_link)
 
-    _send_next_prompt(phone)
+    if send_prompt:
+        _send_next_prompt(phone)
 
 
 # ---------------------------------------------------------------------------
@@ -1896,8 +1913,12 @@ def _add_to_calendar_or_send_link(user_id, phone, title, date_str, time_str, loc
     try:
         from services.google_calendar_service import is_configured, is_connected, create_event, get_auth_url
 
+        logger.info("Google Calendar: configured=%s, connected=%s, user=%s",
+                     is_configured(), is_connected(user_id) if is_configured() else False, user_id)
+
         if is_configured() and is_connected(user_id):
             event_link = create_event(user_id, title, date_str, time_str or None, location or None)
+            logger.info("Google Calendar create_event result: %s", event_link)
             if event_link:
                 send_text(phone, f"📅 הפגישה נוספה ליומן גוגל שלך אוטומטית!\n{event_link}")
                 return
@@ -1911,7 +1932,7 @@ def _add_to_calendar_or_send_link(user_id, phone, title, date_str, time_str, loc
                     f"לחץ לחיבור חד-פעמי:\n{auth_url}")
                 return
     except Exception as e:
-        logger.warning("Google Calendar auto-add failed: %s", e)
+        logger.warning("Google Calendar auto-add failed: %s", e, exc_info=True)
 
     # Fallback: send manual gcal link
     if gcal_link:
