@@ -167,6 +167,19 @@ def handle_incoming_message(from_number, message_body, message_type='text',
         # --- Contact shared (vCard) ---
         if message_type == 'contact' and message_body:
             flow_name, flow_data = ConversationFlow.get_flow(user_id)
+
+            # If user is at delegate_ask step and shares a contact, auto-switch to delegation
+            if flow_name == 'new_task' and flow_data.get('step') == 'delegate_ask':
+                task_id = flow_data.get('task_id')
+                parsed = flow_data.get('parsed', {})
+                delegate_data = {
+                    'task_id': task_id,
+                    'task_title': parsed.get('title', ''),
+                    'due_date': parsed.get('due_date', ''),
+                }
+                ConversationFlow.set_flow(user_id, 'delegate_inline', delegate_data)
+                return _handle_delegate_inline(user_id, from_number, message_body, None, delegate_data)
+
             if flow_name in ('delegate_inline', 'delegate', 'meeting', 'meeting_invite'):
                 text = message_body
                 action_id = _resolve_action_id(None, None, text)
@@ -1036,9 +1049,10 @@ def _finish_meeting_invite(user_id, phone, flow_data):
 
     send_text(phone, msg)
 
-    # Send calendar link as a separate message (better clickability)
-    if gcal_link:
-        send_text(phone, f"📅 הוסף ליומן גוגל:\n{gcal_link}")
+    # Try to auto-add to Google Calendar if connected
+    meeting_date_str = flow_data.get('meeting_date', '')
+    raw_time = flow_data.get('meeting_time') or ''
+    _add_to_calendar_or_send_link(user_id, phone, meeting_title, meeting_date_str, raw_time, location, gcal_link)
 
     _send_next_prompt(phone)
 
@@ -1199,8 +1213,8 @@ def _finalize_new_meeting(user_id, phone, flow_data):
         send_text(phone,
             f"✅ הפגישה נקבעה!\n\n"
             f"📌 *{title}*\n"
-            f"🗓️ {display_date} | 🕐 {display_time}\n\n"
-            f"📅 הוסף ליומן:\n{gcal_link}")
+            f"🗓️ {display_date} | 🕐 {display_time}")
+        _add_to_calendar_or_send_link(user_id, phone, title, meeting_date.isoformat(), time_str, location, gcal_link)
         _send_next_prompt(phone)
 
 
@@ -1875,6 +1889,33 @@ def _reminder_text(minutes):
     if minutes >= 60:
         return 'שעה לפני'
     return f'{minutes} דקות לפני'
+
+
+def _add_to_calendar_or_send_link(user_id, phone, title, date_str, time_str, location, gcal_link):
+    """Try to auto-add meeting to Google Calendar. If not connected, send auth link or gcal link."""
+    try:
+        from services.google_calendar_service import is_configured, is_connected, create_event, get_auth_url
+
+        if is_configured() and is_connected(user_id):
+            event_link = create_event(user_id, title, date_str, time_str or None, location or None)
+            if event_link:
+                send_text(phone, f"📅 הפגישה נוספה ליומן גוגל שלך אוטומטית!\n{event_link}")
+                return
+            # API call failed — fall through to link
+        elif is_configured():
+            # Not connected yet — offer to connect
+            auth_url = get_auth_url(user_id)
+            if auth_url:
+                send_text(phone,
+                    f"📅 רוצה שאוסיף פגישות ליומן שלך אוטומטית?\n"
+                    f"לחץ לחיבור חד-פעמי:\n{auth_url}")
+                return
+    except Exception as e:
+        logger.warning("Google Calendar auto-add failed: %s", e)
+
+    # Fallback: send manual gcal link
+    if gcal_link:
+        send_text(phone, f"📅 הוסף ליומן גוגל:\n{gcal_link}")
 
 
 def _build_gcal_link(title, meeting_date, time_str, location=''):

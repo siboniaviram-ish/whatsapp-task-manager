@@ -20,5 +20,9 @@ class Config:
     DEFAULT_TIMEZONE = 'Asia/Jerusalem'
     APP_URL = os.environ.get('APP_URL', 'https://whatsapp-task-manager.onrender.com').strip().rstrip('/')
 
+    # Google Calendar OAuth2
+    GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+    GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+
     # Reminder Settings
     REMINDER_CHECK_INTERVAL = 60  # seconds

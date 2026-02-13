@@ -56,7 +56,7 @@ def rows_to_list(rows):
 def health_check():
     return jsonify({
         'status': 'ok',
-        'version': '3.3',
+        'version': '3.4',
         'app_url': Config.APP_URL,
         'twilio_configured': bool(Config.TWILIO_ACCOUNT_SID and Config.TWILIO_AUTH_TOKEN),
         'twilio_sid_prefix': Config.TWILIO_ACCOUNT_SID[:6] + '...' if Config.TWILIO_ACCOUNT_SID else 'NOT SET',
@@ -64,7 +64,44 @@ def health_check():
         'openai_configured': bool(Config.OPENAI_API_KEY),
         'openai_key_prefix': Config.OPENAI_API_KEY[:8] + '...' if Config.OPENAI_API_KEY else 'NOT SET',
         'env_openai_raw': bool(os.environ.get('OPENAI_API_KEY')),
+        'google_calendar_configured': bool(Config.GOOGLE_CLIENT_ID and Config.GOOGLE_CLIENT_SECRET),
     })
+
+
+# ============ GOOGLE CALENDAR OAUTH ============
+
+@app.route('/auth/google/callback')
+def google_callback():
+    """Handle Google OAuth2 callback after user authorizes."""
+    from services.google_calendar_service import handle_callback
+    from services.interactive_service import send_text
+
+    code = request.args.get('code')
+    state = request.args.get('state')
+    error = request.args.get('error')
+
+    if error:
+        return f"<h2>Authorization cancelled</h2><p>{error}</p>", 400
+
+    if not code or not state:
+        return "<h2>Missing parameters</h2>", 400
+
+    user_id = handle_callback(code, state)
+    if user_id:
+        # Notify user via WhatsApp that connection succeeded
+        try:
+            db = get_db()
+            user = db.execute("SELECT phone_number FROM users WHERE id = ?", (user_id,)).fetchone()
+            db.close()
+            if user:
+                send_text(user['phone_number'],
+                    "✅ יומן Google חובר בהצלחה!\n\n"
+                    "מעכשיו כל פגישה שתקבע תתווסף אוטומטית ליומן שלך 📅")
+        except Exception:
+            pass
+        return "<h2>✅ Connected!</h2><p>Google Calendar connected successfully. You can close this window and return to WhatsApp.</p>"
+    else:
+        return "<h2>❌ Error</h2><p>Failed to connect Google Calendar. Please try again.</p>", 500
 
 
 # ============ PAGE ROUTES ============

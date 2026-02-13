@@ -154,6 +154,18 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id, last_interaction);
     ''')
 
+    # Google Calendar tokens
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS google_tokens (
+            user_id INTEGER PRIMARY KEY REFERENCES users(id),
+            access_token TEXT NOT NULL,
+            refresh_token TEXT NOT NULL,
+            expiry TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Migrations: add new columns (safe to re-run)
     migrations = [
         "ALTER TABLE tasks ADD COLUMN reminder_before INTEGER",
