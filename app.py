@@ -714,10 +714,21 @@ def setup_scheduler():
                 except Exception as e:
                     logger.error("Weekly summary job failed: %s", e)
 
+        def keep_alive():
+            """Ping own health endpoint to prevent Render from spinning down."""
+            try:
+                import requests as http_req
+                url = f"{Config.APP_URL}/health"
+                resp = http_req.get(url, timeout=10)
+                logger.debug("Keep-alive ping: %s (%s)", resp.status_code, url)
+            except Exception as e:
+                logger.debug("Keep-alive ping failed: %s", e)
+
         scheduler.add_job(check_reminders, 'interval', seconds=Config.REMINDER_CHECK_INTERVAL)
         scheduler.add_job(send_weekly_summaries, 'cron', day_of_week='sun', hour=8, minute=0)
+        scheduler.add_job(keep_alive, 'interval', minutes=10)
         scheduler.start()
-        logger.info("Reminder scheduler started (with weekly summary)")
+        logger.info("Scheduler started (reminders + weekly summary + keep-alive every 10min)")
     except Exception as e:
         logger.warning(f"Scheduler not started: {e}")
 
